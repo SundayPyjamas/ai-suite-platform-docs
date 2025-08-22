@@ -1,94 +1,432 @@
 ---
-title: 'Development'
-description: 'Preview changes locally to update your docs'
+title: 'Development Setup'
+description: 'Set up your local development environment for API integration and testing'
 ---
 
+## Overview
+
+This guide covers setting up your development environment for integrating with the SundayPyjamas AI Suite API, including local testing, documentation preview, and development best practices.
+
 <Info>
-  **Prerequisites**:
-  - Node.js version 19 or higher
-  - A docs repository with a `docs.json` file
+This documentation can be run locally for contributions and updates.
 </Info>
 
-Follow these steps to install and run Mintlify on your operating system.
+## API Development Setup
+
+### Environment Configuration
 
 <Steps>
-<Step title="Install the Mintlify CLI">
+<Step title="Get Your API Key">
+Generate an API key from your SundayPyjamas workspace:
+1. Navigate to **Settings** → **API** tab
+2. Click **"Generate API Key"**
+3. Save the key securely
+</Step>
 
+<Step title="Set Environment Variables">
+Create a `.env` file in your project:
+
+```bash
+# API Configuration
+SUNDAYPYJAMAS_API_KEY=spj_ai_your_api_key_here
+SUNDAYPYJAMAS_API_URL=https://suite.sundaypyjamas.com/api/v1
+
+# Development Settings
+NODE_ENV=development
+PORT=3000
+```
+</Step>
+
+<Step title="Install Dependencies">
+Choose your preferred language and install required packages:
+
+<Tabs>
+<Tab title="JavaScript/Node.js">
+```bash
+# Basic setup (Node.js 18+)
+npm init -y
+npm install dotenv
+
+# For advanced features
+npm install node-fetch @types/node
+```
+</Tab>
+
+<Tab title="Python">
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install packages
+pip install requests python-dotenv aiohttp
+```
+</Tab>
+
+<Tab title="Go">
+```bash
+# Initialize Go module
+go mod init your-project
+
+# No additional packages needed for basic HTTP requests
+```
+</Tab>
+</Tabs>
+</Step>
+</Steps>
+
+## Local Documentation Development
+
+If you want to contribute to this documentation or run it locally:
+
+<Steps>
+<Step title="Prerequisites">
+- Node.js version 19 or higher
+- Git for version control
+</Step>
+
+<Step title="Install Documentation CLI">
 ```bash
 npm i -g mint
 ```
 </Step>
 
-<Step title="Preview locally">
-
-Navigate to your docs directory where your `docs.json` file is located, and run the following command:
-
+<Step title="Clone and Preview">
 ```bash
+# Clone the documentation repository
+git clone <repository-url>
+cd ai-suite-platform-docs
+
+# Start local preview
 mint dev
 ```
 
-A local preview of your documentation will be available at `http://localhost:3000`.
-
+A local preview will be available at `http://localhost:3000`.
 </Step>
 </Steps>
 
-## Custom ports
-
-By default, Mintlify uses port 3000. You can customize the port Mintlify runs on by using the `--port` flag. For example, to run Mintlify on port 3333, use this command:
+### Custom Ports
 
 ```bash
+# Use a different port
 mint dev --port 3333
+
+# Automatic port selection if 3000 is in use
+# Port 3000 is already in use. Trying 3001 instead.
 ```
 
-If you attempt to run Mintlify on a port that's already in use, it will use the next available port:
+## Testing Your Integration
 
-```md
-Port 3000 is already in use. Trying 3001 instead.
+### Basic Connection Test
+
+<CodeGroup>
+```javascript test-connection.js
+// test-connection.js
+require('dotenv').config();
+
+async function testConnection() {
+    const response = await fetch(`${process.env.SUNDAYPYJAMAS_API_URL}/chat`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${process.env.SUNDAYPYJAMAS_API_KEY}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            messages: [{ role: 'user', content: 'Hello! This is a test.' }]
+        })
+    });
+
+    if (response.ok) {
+        console.log('✅ API connection successful');
+        const result = await response.text();
+        console.log('Response:', result);
+    } else {
+        console.error('❌ API connection failed:', response.status);
+        const error = await response.text();
+        console.error('Error:', error);
+    }
+}
+
+testConnection();
 ```
 
-## Mintlify versions
+```python test_connection.py
+# test_connection.py
+import os
+import requests
+from dotenv import load_dotenv
 
-Please note that each CLI release is associated with a specific version of Mintlify. If your local preview does not align with the production version, please update the CLI:
+load_dotenv()
+
+def test_connection():
+    try:
+        response = requests.post(
+            f"{os.getenv('SUNDAYPYJAMAS_API_URL')}/chat",
+            headers={
+                'Authorization': f"Bearer {os.getenv('SUNDAYPYJAMAS_API_KEY')}",
+                'Content-Type': 'application/json'
+            },
+            json={
+                'messages': [{'role': 'user', 'content': 'Hello! This is a test.'}]
+            }
+        )
+        
+        if response.ok:
+            print('✅ API connection successful')
+            print('Response:', response.text)
+        else:
+            print(f'❌ API connection failed: {response.status_code}')
+            print('Error:', response.text)
+            
+    except Exception as e:
+        print(f'❌ Connection error: {e}')
+
+if __name__ == '__main__':
+    test_connection()
+```
+
+```bash test-connection.sh
+#!/bin/bash
+# test-connection.sh
+
+source .env
+
+response=$(curl -s -w "%{http_code}" -o response.txt \
+    -X POST "$SUNDAYPYJAMAS_API_URL/chat" \
+    -H "Authorization: Bearer $SUNDAYPYJAMAS_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"messages": [{"role": "user", "content": "Hello! This is a test."}]}')
+
+if [ "$response" = "200" ]; then
+    echo "✅ API connection successful"
+    echo "Response:"
+    cat response.txt
+else
+    echo "❌ API connection failed: HTTP $response"
+    cat response.txt
+fi
+
+rm response.txt
+```
+</CodeGroup>
+
+### Integration Testing
+
+Create a comprehensive test suite:
+
+```javascript
+// tests/api-integration.test.js
+const assert = require('assert');
+require('dotenv').config();
+
+describe('SundayPyjamas AI API Integration', () => {
+    const apiUrl = process.env.SUNDAYPYJAMAS_API_URL;
+    const apiKey = process.env.SUNDAYPYJAMAS_API_KEY;
+
+    it('should handle basic chat request', async () => {
+        const response = await fetch(`${apiUrl}/chat`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: 'Hello' }]
+            })
+        });
+
+        assert.strictEqual(response.status, 200);
+        const result = await response.text();
+        assert(result.length > 0);
+    });
+
+    it('should handle system messages', async () => {
+        const response = await fetch(`${apiUrl}/chat`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [
+                    { role: 'system', content: 'You are a helpful assistant.' },
+                    { role: 'user', content: 'What is 2+2?' }
+                ]
+            })
+        });
+
+        assert.strictEqual(response.status, 200);
+    });
+
+    it('should return error for invalid API key', async () => {
+        const response = await fetch(`${apiUrl}/chat`, {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer invalid_key',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: 'Hello' }]
+            })
+        });
+
+        assert.strictEqual(response.status, 401);
+    });
+});
+```
+
+## Development Tools
+
+### Recommended Extensions
+
+<CardGroup cols={2}>
+  <Card title="VS Code Extensions" icon="code">
+    - MDX extension for documentation
+    - Prettier for code formatting
+    - REST Client for API testing
+    - dotenv for environment variables
+  </Card>
+  <Card title="API Testing Tools" icon="test-tube">
+    - Postman for interactive testing
+    - Insomnia for REST API testing
+    - HTTPie for command-line testing
+    - Thunder Client for VS Code
+  </Card>
+</CardGroup>
+
+### Environment Validation
+
+Create a validation script to check your setup:
+
+```javascript
+// scripts/validate-env.js
+require('dotenv').config();
+
+const requiredEnvVars = [
+    'SUNDAYPYJAMAS_API_KEY',
+    'SUNDAYPYJAMAS_API_URL'
+];
+
+console.log('🔍 Validating environment configuration...\n');
+
+let hasErrors = false;
+
+requiredEnvVars.forEach(envVar => {
+    const value = process.env[envVar];
+    if (!value) {
+        console.error(`❌ Missing required environment variable: ${envVar}`);
+        hasErrors = true;
+    } else {
+        console.log(`✅ ${envVar}: ${value.substring(0, 20)}...`);
+    }
+});
+
+// Validate API key format
+const apiKey = process.env.SUNDAYPYJAMAS_API_KEY;
+if (apiKey && !apiKey.startsWith('spj_ai_')) {
+    console.error('❌ Invalid API key format. Should start with "spj_ai_"');
+    hasErrors = true;
+}
+
+// Validate URL format
+const apiUrl = process.env.SUNDAYPYJAMAS_API_URL;
+if (apiUrl && !apiUrl.startsWith('https://')) {
+    console.warn('⚠️  API URL should use HTTPS for security');
+}
+
+if (hasErrors) {
+    console.error('\n❌ Environment validation failed. Please fix the issues above.');
+    process.exit(1);
+} else {
+    console.log('\n✅ Environment validation passed!');
+}
+```
+
+## Documentation Tools
+
+### Link Validation
 
 ```bash
-npm mint update
-```
-
-## Validating links
-
-The CLI can assist with validating links in your documentation. To identify any broken links, use the following command:
-
-```bash
+# Validate all links in documentation
 mint broken-links
+
+# Check specific files
+mint broken-links --files quickstart.mdx,authentication.mdx
 ```
 
-## Deployment
+### Building for Production
 
-If the deployment is successful, you should see the following:
+```bash
+# Build documentation
+mint build
 
-<Frame>
-  <img src="/images/checks-passed.png" alt="Screenshot of a deployment confirmation message that says All checks have passed." style={{ borderRadius: '0.5rem' }} />
-</Frame>
-
-## Code formatting
-
-We suggest using extensions on your IDE to recognize and format MDX. If you're a VSCode user, consider the [MDX VSCode extension](https://marketplace.visualstudio.com/items?itemName=unifiedjs.vscode-mdx) for syntax highlighting, and [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) for code formatting.
+# Deploy to production (requires setup)
+mint deploy
+```
 
 ## Troubleshooting
 
 <AccordionGroup>
-  <Accordion title='Error: Could not load the "sharp" module using the darwin-arm64 runtime'>
+<Accordion title="API Connection Issues">
+**Common solutions:**
+- Verify API key format (`spj_ai_[64-characters]`)
+- Check environment variable loading
+- Ensure HTTPS is used for API URL
+- Verify workspace permissions
 
-    This may be due to an outdated version of node. Try the following:
-    1. Remove the currently-installed version of the CLI: `npm remove -g mint`
-    2. Upgrade to Node v19 or higher.
-    3. Reinstall the CLI: `npm i -g mint`
-  </Accordion>
+```bash
+# Debug API key
+echo "API Key: ${SUNDAYPYJAMAS_API_KEY:0:20}..."
+echo "API URL: $SUNDAYPYJAMAS_API_URL"
+```
+</Accordion>
 
-  <Accordion title="Issue: Encountering an unknown error">
-  
-    Solution: Go to the root of your device and delete the `~/.mintlify` folder. Then run `mint dev` again.
-  </Accordion>
+<Accordion title="Documentation Build Errors">
+**Common solutions:**
+- Update documentation CLI: `npm update -g mint`
+- Clear cache: `rm -rf ~/.mintlify && mint dev`
+- Check MDX syntax in files
+- Validate JSON configuration
+
+```bash
+# Reinstall CLI if needed
+npm remove -g mint
+npm i -g mint
+```
+</Accordion>
+
+<Accordion title="Environment Variable Issues">
+**Common solutions:**
+- Check `.env` file location (project root)
+- Verify no extra spaces in variable assignments
+- Ensure proper dotenv loading in code
+- Check for conflicting environment variables
+
+```javascript
+// Debug environment loading
+console.log('Current working directory:', process.cwd());
+console.log('Environment variables loaded:', !!process.env.SUNDAYPYJAMAS_API_KEY);
+```
+</Accordion>
 </AccordionGroup>
 
-Curious about what changed in the latest CLI version? Check out the [CLI changelog](https://www.npmjs.com/package/mintlify?activeTab=versions).
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Quickstart" icon="rocket" href="/quickstart">
+    Start making your first API calls with example code
+  </Card>
+  <Card title="Code Examples" icon="code" href="/examples/overview">
+    Explore complete implementation examples
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Learn about API key management and security
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/rate-limits">
+    Understand usage optimization and monitoring
+  </Card>
+</CardGroup>
+
+<Tip>
+Join our developer community for support, updates, and to share your implementations with other developers.
+</Tip>

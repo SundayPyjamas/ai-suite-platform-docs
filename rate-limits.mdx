@@ -1,0 +1,746 @@
+---
+title: "Rate Limits & Token Usage"
+description: "Understand rate limits, token usage, billing, and optimization strategies for cost-effective API usage"
+---
+
+## Overview
+
+The SundayPyjamas AI Suite API uses token-based usage tracking with workspace-level limits to ensure fair usage and optimal performance for all users.
+
+<Info>
+All API usage is measured in tokens, which represent units of text processed by the AI models.
+</Info>
+
+## Token-Based Limits
+
+### What are Tokens?
+
+Tokens are the fundamental units used to measure API usage:
+
+<CardGroup cols={2}>
+  <Card title="Input Tokens" icon="arrow-right">
+    Count the text you send to the API (your messages and conversation history)
+  </Card>
+  <Card title="Output Tokens" icon="arrow-left">
+    Count the AI-generated response text
+  </Card>
+</CardGroup>
+
+<Tip>
+**Token estimation**: Roughly **4 characters = 1 token** for English text.
+</Tip>
+
+### Token Counting Example
+
+```javascript
+// Example token usage calculation
+const request = {
+  messages: [
+    { role: "user", content: "Hello, how are you?" } // ~6 tokens
+  ]
+};
+
+// Typical response: ~15 tokens
+// Total usage: ~21 tokens
+```
+
+**Breakdown:**
+- Input: "Hello, how are you?" (19 characters ÷ 4) ≈ 6 tokens
+- Output: "I'm doing well, thank you for asking!" (36 characters ÷ 4) ≈ 9 tokens
+- **Total: ~15 tokens**
+
+## Workspace Limits
+
+### Token Quotas
+
+<CardGroup cols={2}>
+  <Card title="Monthly Limits" icon="calendar">
+    Each workspace has a monthly token limit based on subscription plan
+  </Card>
+  <Card title="Shared Usage" icon="users">
+    All API keys in a workspace share the same token pool
+  </Card>
+  <Card title="Monthly Reset" icon="refresh">
+    Limits reset on your billing cycle date
+  </Card>
+  <Card title="Real-time Tracking" icon="chart-line">
+    Usage is tracked in real-time across all requests
+  </Card>
+</CardGroup>
+
+### Checking Usage
+
+Monitor your token usage through multiple channels:
+
+<Tabs>
+<Tab title="Workspace Analytics">
+View detailed usage in your workspace dashboard:
+- Current month usage vs. limit
+- Daily usage trends
+- API key breakdown
+- Historical usage data
+</Tab>
+
+<Tab title="Usage API">
+```bash
+# Check workspace token usage (requires session auth)
+curl -X GET "https://suite.sundaypyjamas.com/api/workspace/WORKSPACE_ID/token-usage" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"
+```
+
+**Response:**
+```json
+{
+  "totalTokens": 45230,
+  "tokenLimit": 100000,
+  "resetDate": "2024-02-15T00:00:00Z",
+  "dailyUsage": [
+    {"date": "2024-01-14", "tokens": 1250},
+    {"date": "2024-01-15", "tokens": 2100}
+  ]
+}
+```
+</Tab>
+
+<Tab title="Response Headers">
+<Note>
+Token usage information in response headers is coming soon!
+</Note>
+
+Future response headers will include:
+```http
+X-Token-Usage-Input: 15
+X-Token-Usage-Output: 42
+X-Token-Usage-Total: 57
+X-Monthly-Usage: 45230
+X-Monthly-Limit: 100000
+```
+</Tab>
+</Tabs>
+
+## Rate Limiting
+
+### Request Limits
+
+<CardGroup cols={2}>
+  <Card title="Concurrent Requests" icon="layer-group">
+    Multiple simultaneous requests are supported
+  </Card>
+  <Card title="Fair Usage" icon="balance-scale">
+    No hard rate limits, but usage is monitored for abuse
+  </Card>
+  <Card title="Throttling" icon="gauge-high">
+    Excessive usage may be temporarily throttled
+  </Card>
+  <Card title="Workspace Isolation" icon="building">
+    Rate limits are applied per workspace
+  </Card>
+</CardGroup>
+
+### API Key Limits
+
+<CardGroup cols={2}>
+  <Card title="Maximum Keys" icon="key">
+    10 active API keys per workspace
+  </Card>
+  <Card title="Key Creation" icon="user-shield">
+    Only workspace owners and admins can create keys
+  </Card>
+  <Card title="Shared Pool" icon="share">
+    All keys share the workspace token pool
+  </Card>
+  <Card title="Individual Tracking" icon="fingerprint">
+    Usage tracked separately for each API key
+  </Card>
+</CardGroup>
+
+## Error Responses
+
+### Token Limit Exceeded
+
+When your workspace exceeds its token limit:
+
+```json
+{
+  "error": "Token limit exceeded"
+}
+```
+
+**HTTP Status:** `403 Forbidden`
+
+**Solutions:**
+<AccordionGroup>
+<Accordion title="Wait for Monthly Reset">
+Your token limit will reset on your next billing cycle date. Check your workspace settings for the exact reset date.
+</Accordion>
+
+<Accordion title="Upgrade Subscription Plan">
+Increase your monthly token limit by upgrading to a higher tier plan with more tokens.
+</Accordion>
+
+<Accordion title="Optimize Token Usage">
+Reduce tokens per request by:
+- Writing more concise prompts
+- Trimming conversation history
+- Using more efficient message structures
+</Accordion>
+</AccordionGroup>
+
+### Rate Limited
+
+If you're making too many requests:
+
+```json
+{
+  "error": "Rate limit exceeded"
+}
+```
+
+**HTTP Status:** `429 Too Many Requests`
+
+**Solutions:**
+<AccordionGroup>
+<Accordion title="Implement Exponential Backoff">
+```javascript
+async function makeRequestWithBackoff(request, maxRetries = 3) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fetch('/api/v1/chat', request);
+    } catch (error) {
+      if (error.status === 429 && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s, 8s
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+```
+</Accordion>
+
+<Accordion title="Reduce Request Frequency">
+Space out your requests or implement a queue system to manage request timing.
+</Accordion>
+
+<Accordion title="Use Batch Processing">
+Combine multiple prompts into single requests when possible to reduce the total number of API calls.
+</Accordion>
+</AccordionGroup>
+
+## Optimization Strategies
+
+### Efficient Prompting
+
+<AccordionGroup>
+<Accordion title="Write Concise Prompts">
+```javascript
+// ❌ Inefficient - Too verbose (150+ tokens)
+const verbosePrompt = `
+I would like you to please help me write a very professional business email 
+that I need to send to my client regarding the project status update that we 
+discussed in our previous meeting last week. The email should be formal and 
+include all the necessary details about the progress we have made so far and 
+what the next steps will be. Please make sure it sounds professional and 
+includes appropriate business language.
+`;
+
+// ✅ Efficient - Concise and clear (15-20 tokens)
+const efficientPrompt = `Write a professional email to a client with a project status update. Include progress made and next steps.`;
+```
+</Accordion>
+
+<Accordion title="Use System Messages Wisely">
+```javascript
+// ✅ Good - Set context once with system message
+const messages = [
+  {
+    role: 'system',
+    content: 'You are a professional email writer. Write clear, polite emails.'
+  },
+  {
+    role: 'user',
+    content: 'Write a follow-up email after a job interview.'
+  }
+];
+
+// ❌ Less efficient - Repeat instructions in every user message
+const messagesVerbose = [
+  {
+    role: 'user',
+    content: 'You are a professional email writer. Write a clear, polite follow-up email after a job interview.'
+  }
+];
+```
+</Accordion>
+
+<Accordion title="Trim Conversation History">
+```javascript
+function trimConversation(messages, maxTokens = 2000) {
+  let totalTokens = 0;
+  const trimmedMessages = [];
+  
+  // Always keep system message if present
+  if (messages[0]?.role === 'system') {
+    trimmedMessages.push(messages[0]);
+    totalTokens += estimateTokens(messages[0].content);
+  }
+  
+  // Add messages from the end, working backwards
+  for (let i = messages.length - 1; i >= 1; i--) {
+    const message = messages[i];
+    const messageTokens = estimateTokens(message.content);
+    
+    if (totalTokens + messageTokens > maxTokens) break;
+    
+    trimmedMessages.unshift(message);
+    totalTokens += messageTokens;
+  }
+  
+  return trimmedMessages;
+}
+
+function estimateTokens(text) {
+  return Math.ceil(text.length / 4);
+}
+```
+</Accordion>
+</AccordionGroup>
+
+### Smart Request Management
+
+<AccordionGroup>
+<Accordion title="Batch Similar Requests">
+```javascript
+// ❌ Multiple separate requests (3 API calls)
+const requests = [
+  'Write a haiku about coding',
+  'Write a haiku about design', 
+  'Write a haiku about teamwork'
+];
+
+for (const prompt of requests) {
+  await apiCall(prompt);
+}
+
+// ✅ Single batch request (1 API call)
+const batchPrompt = `Write three haikus about:
+1. Coding
+2. Design  
+3. Teamwork
+
+Format each haiku clearly with numbers.`;
+
+await apiCall(batchPrompt);
+```
+</Accordion>
+
+<Accordion title="Implement Request Queuing">
+```javascript
+class APIQueue {
+  constructor(maxConcurrent = 3, delayBetweenRequests = 100) {
+    this.queue = [];
+    this.running = 0;
+    this.maxConcurrent = maxConcurrent;
+    this.delay = delayBetweenRequests;
+  }
+
+  async add(requestFn) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ requestFn, resolve, reject });
+      this.process();
+    });
+  }
+
+  async process() {
+    if (this.running >= this.maxConcurrent || this.queue.length === 0) {
+      return;
+    }
+
+    this.running++;
+    const { requestFn, resolve, reject } = this.queue.shift();
+
+    try {
+      const result = await requestFn();
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    } finally {
+      this.running--;
+      setTimeout(() => this.process(), this.delay);
+    }
+  }
+}
+
+// Usage
+const apiQueue = new APIQueue(3, 100); // Max 3 concurrent, 100ms delay
+```
+</Accordion>
+
+<Accordion title="Cache Responses">
+```javascript
+class ResponseCache {
+  constructor(ttl = 3600000) { // 1 hour default
+    this.cache = new Map();
+    this.ttl = ttl;
+  }
+
+  generateKey(messages) {
+    return JSON.stringify(messages);
+  }
+
+  get(messages) {
+    const key = this.generateKey(messages);
+    const cached = this.cache.get(key);
+    
+    if (cached && Date.now() - cached.timestamp < this.ttl) {
+      return cached.response;
+    }
+    
+    if (cached) {
+      this.cache.delete(key); // Remove expired entry
+    }
+    
+    return null;
+  }
+
+  set(messages, response) {
+    const key = this.generateKey(messages);
+    this.cache.set(key, {
+      response,
+      timestamp: Date.now()
+    });
+  }
+}
+
+// Usage
+const cache = new ResponseCache();
+
+async function cachedApiCall(messages) {
+  // Check cache first
+  let response = cache.get(messages);
+  if (response) {
+    console.log('Cache hit!');
+    return response;
+  }
+  
+  // Make API call
+  response = await makeApiCall(messages);
+  cache.set(messages, response);
+  return response;
+}
+```
+</Accordion>
+</AccordionGroup>
+
+## Usage Monitoring
+
+### Track Token Usage
+
+<CodeGroup>
+```javascript JavaScript Token Tracker
+class TokenTracker {
+  constructor() {
+    this.dailyUsage = new Map();
+    this.currentUsage = 0;
+  }
+
+  estimateTokens(text) {
+    return Math.ceil(text.length / 4);
+  }
+
+  trackRequest(inputText, outputText) {
+    const inputTokens = this.estimateTokens(inputText);
+    const outputTokens = this.estimateTokens(outputText);
+    const totalTokens = inputTokens + outputTokens;
+
+    this.currentUsage += totalTokens;
+    
+    const today = new Date().toDateString();
+    const dailyTotal = this.dailyUsage.get(today) || 0;
+    this.dailyUsage.set(today, dailyTotal + totalTokens);
+
+    console.log(`Request used ${totalTokens} tokens (${inputTokens} input + ${outputTokens} output)`);
+    console.log(`Daily usage: ${this.dailyUsage.get(today)} tokens`);
+    
+    return { inputTokens, outputTokens, totalTokens };
+  }
+
+  getDailyUsage(date = new Date().toDateString()) {
+    return this.dailyUsage.get(date) || 0;
+  }
+
+  getProjectedMonthlyUsage() {
+    const today = new Date();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const dayOfMonth = today.getDate();
+    
+    const dailyAverage = this.currentUsage / dayOfMonth;
+    return Math.ceil(dailyAverage * daysInMonth);
+  }
+}
+
+// Usage
+const tracker = new TokenTracker();
+
+async function chatWithTracking(messages) {
+  const inputText = messages.map(m => m.content).join(' ');
+  
+  const response = await makeChatRequest(messages);
+  const outputText = await response.text();
+  
+  tracker.trackRequest(inputText, outputText);
+  
+  return outputText;
+}
+```
+
+```python Python Usage Monitor
+import time
+from typing import Dict, List
+from collections import defaultdict
+
+class UsageMonitor:
+    def __init__(self):
+        self.daily_usage = defaultdict(int)
+        self.total_usage = 0
+        
+    def estimate_tokens(self, text: str) -> int:
+        return len(text) // 4 + 1
+    
+    def track_request(self, input_text: str, output_text: str) -> Dict[str, int]:
+        input_tokens = self.estimate_tokens(input_text)
+        output_tokens = self.estimate_tokens(output_text)
+        total_tokens = input_tokens + output_tokens
+        
+        self.total_usage += total_tokens
+        
+        today = time.strftime('%Y-%m-%d')
+        self.daily_usage[today] += total_tokens
+        
+        return {
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens,
+            'total_tokens': total_tokens,
+            'daily_total': self.daily_usage[today]
+        }
+    
+    def get_usage_summary(self) -> Dict:
+        return {
+            'total_usage': self.total_usage,
+            'daily_usage': dict(self.daily_usage),
+            'avg_daily': self.total_usage / max(len(self.daily_usage), 1)
+        }
+
+# Usage
+monitor = UsageMonitor()
+
+def chat_with_monitoring(messages):
+    input_text = ' '.join(msg['content'] for msg in messages)
+    
+    response = make_chat_request(messages)
+    output_text = response.text
+    
+    usage = monitor.track_request(input_text, output_text)
+    print(f"Request used {usage['total_tokens']} tokens")
+    
+    return output_text
+```
+</CodeGroup>
+
+### Usage Alerts
+
+```javascript
+class UsageAlerts {
+  constructor(monthlyLimit, alertThresholds = [50, 75, 90, 95]) {
+    this.monthlyLimit = monthlyLimit;
+    this.alertThresholds = alertThresholds;
+    this.alertsSent = new Set();
+  }
+
+  checkUsage(currentUsage) {
+    const usagePercentage = (currentUsage / this.monthlyLimit) * 100;
+    
+    for (const threshold of this.alertThresholds) {
+      if (usagePercentage >= threshold && !this.alertsSent.has(threshold)) {
+        this.sendAlert(threshold, currentUsage, usagePercentage);
+        this.alertsSent.add(threshold);
+      }
+    }
+  }
+
+  sendAlert(threshold, currentUsage, percentage) {
+    const message = `⚠️ Token Usage Alert: ${percentage.toFixed(1)}% of monthly limit used (${currentUsage}/${this.monthlyLimit} tokens)`;
+    
+    console.warn(message);
+    
+    if (threshold >= 95) {
+      console.error('🚨 Critical: Approaching token limit! Consider upgrading plan or optimizing usage.');
+    }
+    
+    // In production, you might:
+    // - Send email notifications
+    // - Post to Slack/Discord  
+    // - Show in-app notifications
+    // - Log to monitoring service
+  }
+
+  resetAlerts() {
+    this.alertsSent.clear();
+  }
+}
+
+// Usage
+const alerts = new UsageAlerts(100000); // 100K monthly limit
+
+function checkUsageAlerts(currentUsage) {
+  alerts.checkUsage(currentUsage);
+}
+```
+
+## Subscription Plans
+
+### Token Limits by Plan
+
+| Plan | Monthly Tokens | API Keys | Features |
+|------|---------------|----------|----------|
+| **Free** | 10,000 | 2 | Basic API access |
+| **Starter** | 50,000 | 5 | Standard support |
+| **Professional** | 200,000 | 10 | Priority support, analytics |
+| **Enterprise** | Custom | Unlimited | Custom limits, SLA, dedicated support |
+
+### Upgrading Plans
+
+<CardGroup cols={2}>
+  <Card title="Increase Token Limit" icon="arrow-up">
+    Upgrade your subscription to get more monthly tokens
+  </Card>
+  <Card title="Optimize Usage" icon="gauge-high">
+    Reduce tokens per request with better prompting
+  </Card>
+  <Card title="Enterprise Solutions" icon="building">
+    Custom limits and pricing for high-volume usage
+  </Card>
+  <Card title="Usage Analytics" icon="chart-bar">
+    Detailed analytics to understand and optimize usage
+  </Card>
+</CardGroup>
+
+## Fair Usage Policy
+
+### Acceptable Use ✅
+
+- Content generation for business purposes
+- Integration into applications and services  
+- Automated workflows and batch processing
+- Educational and research projects
+- Commercial use within subscription limits
+
+### Prohibited Use ❌
+
+- Reselling API access to third parties
+- Overwhelming the service with excessive requests
+- Using the API for illegal or harmful content
+- Attempting to reverse engineer the service
+- Bypassing rate limits or usage restrictions
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title='"Token limit exceeded" Error'>
+```javascript
+// Check usage before making requests
+async function safeApiCall(messages) {
+  try {
+    // Check usage first (implement based on your tracking)
+    const usage = await getCurrentUsage();
+    if (usage.percentage > 95) {
+      throw new Error('Approaching token limit. Request not sent.');
+    }
+    
+    return await chatAPI(messages);
+  } catch (error) {
+    if (error.message.includes('Token limit exceeded')) {
+      return 'Sorry, the workspace has reached its monthly token limit. Please try again next month or upgrade your plan.';
+    }
+    throw error;
+  }
+}
+```
+</Accordion>
+
+<Accordion title="Optimize Large Conversations">
+```javascript
+function optimizeConversation(messages, maxTokens = 2000) {
+  // Keep system message and recent conversation
+  const systemMsg = messages.find(m => m.role === 'system');
+  const otherMessages = messages.filter(m => m.role !== 'system');
+  
+  // Calculate tokens and trim if needed
+  let totalTokens = systemMsg ? estimateTokens(systemMsg.content) : 0;
+  const optimizedMessages = systemMsg ? [systemMsg] : [];
+  
+  // Add messages from most recent backwards
+  for (let i = otherMessages.length - 1; i >= 0; i--) {
+    const message = otherMessages[i];
+    const messageTokens = estimateTokens(message.content);
+    
+    if (totalTokens + messageTokens > maxTokens) break;
+    
+    optimizedMessages.push(message);
+    totalTokens += messageTokens;
+  }
+  
+  // Reverse to maintain chronological order (except system message)
+  if (systemMsg) {
+    return [systemMsg, ...optimizedMessages.slice(1).reverse()];
+  }
+  return optimizedMessages.reverse();
+}
+```
+</Accordion>
+
+<Accordion title="Handle Token Estimation">
+```javascript
+// More accurate token estimation
+function estimateTokens(text) {
+  // Account for different token patterns
+  const words = text.split(/\s+/);
+  const avgTokensPerWord = 1.3; // More accurate estimate
+  return Math.ceil(words.length * avgTokensPerWord);
+}
+
+// Pre-flight token check
+function preflightCheck(messages, maxTokens = 4000) {
+  const totalTokens = messages.reduce((sum, msg) => 
+    sum + estimateTokens(msg.content), 0
+  );
+  
+  if (totalTokens > maxTokens) {
+    throw new Error(`Request too large: ${totalTokens} tokens (max: ${maxTokens})`);
+  }
+  
+  return totalTokens;
+}
+```
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Learn about API key management and security best practices
+  </Card>
+  <Card title="Chat API" icon="comments" href="/chat-api">
+    Explore the complete Chat API documentation and examples
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/errors">
+    Comprehensive guide to handling API errors and edge cases
+  </Card>
+  <Card title="Code Examples" icon="code" href="/examples/overview">
+    See real-world implementations with usage tracking and optimization
+  </Card>
+</CardGroup>

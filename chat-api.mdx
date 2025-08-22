@@ -1,0 +1,676 @@
+---
+title: "Chat API"
+description: "Complete guide to the Chat API for conversational AI, content generation, and text completion"
+---
+
+## Overview
+
+The Chat API provides access to powerful language models for conversational AI, content generation, and text completion tasks. Built for developers who need reliable, scalable AI solutions with streaming responses.
+
+<Info>
+All responses are streamed in real-time, providing a better user experience for conversational applications.
+</Info>
+
+## Base URL
+
+```
+POST /api/v1/chat
+```
+
+## Authentication
+
+All requests require a valid API key in the Authorization header:
+
+```http
+Authorization: Bearer spj_ai_your_api_key_here
+```
+
+<Note>
+Learn more about [API key generation and management](/authentication).
+</Note>
+
+## Request Format
+
+### Required Headers
+
+| Header | Value | Description |
+|--------|-------|-------------|
+| `Authorization` | `Bearer spj_ai_[your_api_key]` | **Required** - Your API key for authentication |
+| `Content-Type` | `application/json` | **Required** - Must be set to application/json |
+
+### Request Body
+
+<ParamField body="messages" type="Array<Message>" required>
+Array of conversation messages. Must contain at least one message.
+</ParamField>
+
+<ParamField body="model" type="string" default="llama-3.3-70b-versatile">
+AI model to use for generating responses. Optional parameter.
+</ParamField>
+
+### Message Object
+
+Each message in the `messages` array must contain:
+
+<ParamField body="role" type="string" required>
+The role of the message sender. Must be one of:
+- `user` - Messages from the user/human
+- `assistant` - Previous AI responses  
+- `system` - System instructions to guide AI behavior
+</ParamField>
+
+<ParamField body="content" type="string" required>
+The actual message content. Cannot be empty.
+</ParamField>
+
+### Available Models
+
+| Model | Description | Best For |
+|-------|-------------|----------|
+| `llama-3.3-70b-versatile` | High-quality general-purpose model (default) | Most use cases, balanced performance |
+
+<Tip>
+More models will be available soon! Check back for updates on specialized models.
+</Tip>
+
+## Response Format
+
+The API returns a streaming text response with the following headers:
+
+```http
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+```
+
+### Response Body
+
+The response is streamed as text chunks. Concatenate all chunks to get the complete AI response.
+
+<ResponseExample>
+```
+Hello! Here's a professional email greeting:
+
+Dear [Recipient's Name],
+
+I hope this email finds you well. I wanted to reach out regarding...
+```
+</ResponseExample>
+
+## Examples
+
+### Basic Chat Request
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello! Can you help me write a professional email?"
+      }
+    ]
+  }'
+```
+</RequestExample>
+
+### Multi-turn Conversation
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is the capital of France?"
+      },
+      {
+        "role": "assistant", 
+        "content": "The capital of France is Paris."
+      },
+      {
+        "role": "user",
+        "content": "What about its population?"
+      }
+    ]
+  }'
+```
+</RequestExample>
+
+### With System Message
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a professional copywriter specializing in marketing content."
+      },
+      {
+        "role": "user",
+        "content": "Write a product description for wireless headphones."
+      }
+    ]
+  }'
+```
+</RequestExample>
+
+### Specifying Model
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Explain quantum computing in simple terms."
+      }
+    ],
+    "model": "llama-3.3-70b-versatile"
+  }'
+```
+</RequestExample>
+
+## Streaming Response Handling
+
+The API returns responses as a stream of text chunks. Here's how to handle streaming in different languages:
+
+<CodeGroup>
+```javascript JavaScript/Node.js
+const response = await fetch('https://suite.sundaypyjamas.com/api/v1/chat', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer spj_ai_your_api_key_here',
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    messages: [
+      { role: 'user', content: 'Hello!' }
+    ]
+  })
+});
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+let fullResponse = '';
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  
+  const chunk = decoder.decode(value);
+  fullResponse += chunk;
+  console.log(chunk); // Process each chunk as it arrives
+}
+
+console.log('Complete response:', fullResponse);
+```
+
+```python Python
+import requests
+
+url = 'https://suite.sundaypyjamas.com/api/v1/chat'
+headers = {
+    'Authorization': 'Bearer spj_ai_your_api_key_here',
+    'Content-Type': 'application/json',
+}
+data = {
+    'messages': [
+        {'role': 'user', 'content': 'Hello!'}
+    ]
+}
+
+response = requests.post(url, headers=headers, json=data, stream=True)
+response.raise_for_status()
+
+full_response = ''
+for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+    if chunk:
+        full_response += chunk
+        print(chunk, end='')  # Process each chunk as it arrives
+
+print(f'\nComplete response: {full_response}')
+```
+
+```go Go
+package main
+
+import (
+    "bufio"
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "net/http"
+    "strings"
+)
+
+func main() {
+    requestBody := map[string]interface{}{
+        "messages": []map[string]string{
+            {"role": "user", "content": "Hello!"},
+        },
+    }
+    
+    jsonData, _ := json.Marshal(requestBody)
+    
+    req, _ := http.NewRequest("POST", "https://suite.sundaypyjamas.com/api/v1/chat", 
+        bytes.NewBuffer(jsonData))
+    req.Header.Set("Authorization", "Bearer spj_ai_your_api_key_here")
+    req.Header.Set("Content-Type", "application/json")
+    
+    client := &http.Client{}
+    resp, _ := client.Do(req)
+    defer resp.Body.Close()
+    
+    scanner := bufio.NewScanner(resp.Body)
+    var fullResponse strings.Builder
+    
+    for scanner.Scan() {
+        chunk := scanner.Text()
+        fullResponse.WriteString(chunk)
+        fmt.Print(chunk) // Process each chunk as it arrives
+    }
+    
+    fmt.Printf("\nComplete response: %s\n", fullResponse.String())
+}
+```
+</CodeGroup>
+
+## Token Usage and Billing
+
+<CardGroup cols={2}>
+  <Card title="Input Tokens" icon="arrow-right">
+    Counted based on the total length of all messages in your request
+  </Card>
+  <Card title="Output Tokens" icon="arrow-left">
+    Counted based on the length of the AI's response
+  </Card>
+  <Card title="Usage Tracking" icon="chart-line">
+    Token usage is tracked and counted toward your workspace limits
+  </Card>
+  <Card title="Optimization" icon="gauge-high">
+    Monitor usage through workspace analytics to optimize costs
+  </Card>
+</CardGroup>
+
+### Token Estimation
+
+<Tip>
+Roughly **4 characters = 1 token** for English text. The API uses the same tokenization as the underlying model for precise counting.
+</Tip>
+
+**Example calculation:**
+```
+Input: "Hello, how are you today?" (26 characters) ≈ 7 tokens
+Output: "I'm doing well, thank you for asking!" (36 characters) ≈ 9 tokens
+Total: ~16 tokens
+```
+
+## Common Use Cases
+
+### Content Generation
+
+<AccordionGroup>
+<Accordion title="Blog Post Writing">
+```json
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a creative content writer specializing in blog posts."
+    },
+    {
+      "role": "user", 
+      "content": "Write an introduction for a blog post about sustainable living tips."
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="Email Writing">
+```json
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a professional email writer. Write clear, polite, and effective emails."
+    },
+    {
+      "role": "user",
+      "content": "Write a follow-up email for a job interview."
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="Marketing Copy">
+```json
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are an expert copywriter. Write compelling marketing copy that drives action."
+    },
+    {
+      "role": "user",
+      "content": "Create homepage copy for a productivity app targeting busy professionals."
+    }
+  ]
+}
+```
+</Accordion>
+</AccordionGroup>
+
+### Code Assistance
+
+<AccordionGroup>
+<Accordion title="Code Generation">
+```json
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful programming assistant. Provide clean, well-documented code."
+    },
+    {
+      "role": "user",
+      "content": "Write a Python function to calculate the fibonacci sequence."
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="Code Review">
+```json
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a senior software engineer. Provide constructive code reviews."
+    },
+    {
+      "role": "user",
+      "content": "Review this JavaScript function and suggest improvements: [code here]"
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="Debugging Help">
+```json
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a debugging expert. Help identify and fix code issues."
+    },
+    {
+      "role": "user",
+      "content": "I'm getting a TypeError in this Python code. Can you help me fix it?"
+    }
+  ]
+}
+```
+</Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+### Common Errors
+
+<AccordionGroup>
+<Accordion title="Invalid API Key (401)">
+```json
+{
+  "error": "Invalid API key"
+}
+```
+
+**Causes:**
+- API key doesn't exist or has been deleted
+- Incorrect API key format
+- Missing Authorization header
+
+**Solutions:**
+- Verify your API key is correct and active
+- Check the Authorization header format: `Bearer spj_ai_...`
+- Generate a new API key if necessary
+</Accordion>
+
+<Accordion title="Missing Messages (400)">
+```json
+{
+  "error": "Messages array is required"
+}
+```
+
+**Cause:** Request body doesn't include a `messages` array
+
+**Solution:** Ensure your request includes a valid `messages` array with at least one message
+</Accordion>
+
+<Accordion title="Invalid Message Format (400)">
+```json
+{
+  "error": "Last message must have valid content"
+}
+```
+
+**Causes:**
+- Message missing required `content` field
+- Empty content string
+- Invalid role value
+
+**Solution:** Ensure all messages have valid `role` and non-empty `content` fields
+</Accordion>
+
+<Accordion title="Token Limit Exceeded (403)">
+```json
+{
+  "error": "Token limit exceeded"
+}
+```
+
+**Causes:**
+- Workspace has exceeded monthly token quota
+- Request is too large
+
+**Solutions:**
+- Wait for monthly token reset
+- Upgrade subscription plan
+- Optimize prompts to use fewer tokens
+</Accordion>
+
+<Accordion title="Rate Limited (429)">
+```json
+{
+  "error": "Rate limit exceeded"
+}
+```
+
+**Cause:** Making requests too quickly
+
+**Solutions:**
+- Implement exponential backoff
+- Reduce request frequency
+- Use batch processing for multiple prompts
+</Accordion>
+
+<Accordion title="Server Error (500)">
+```json
+{
+  "error": "Failed to generate response"
+}
+```
+
+**Causes:**
+- AI model temporarily unavailable
+- Server overload
+- Temporary service disruption
+
+**Solution:** Implement retry logic with exponential backoff
+</Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+### Message Design
+
+<CardGroup cols={2}>
+  <Card title="Clear Instructions" icon="bullseye">
+    Use specific, clear prompts for better results. Be explicit about what you want.
+  </Card>
+  <Card title="System Messages" icon="gear">
+    Use system messages to set context and guide AI behavior for specialized tasks.
+  </Card>
+  <Card title="Conversation Context" icon="history">
+    Include relevant conversation history, but keep it concise to manage token usage.
+  </Card>
+  <Card title="Structured Prompts" icon="list">
+    Break complex requests into clear, structured instructions.
+  </Card>
+</CardGroup>
+
+### Performance Optimization
+
+<AccordionGroup>
+<Accordion title="Handle Streaming Responses">
+Stream responses to provide better user experience in conversational applications.
+
+```javascript
+// ✅ Good - Handle streaming for real-time display
+const processStreamingResponse = async (response) => {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    const chunk = decoder.decode(value);
+    displayChunk(chunk); // Update UI immediately
+  }
+};
+```
+</Accordion>
+
+<Accordion title="Implement Error Handling">
+Always implement proper error handling and retry logic.
+
+```javascript
+// ✅ Good - Robust error handling
+const makeRequest = async (messages, retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch('/api/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ messages })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error);
+      }
+      
+      return response;
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+    }
+  }
+};
+```
+</Accordion>
+
+<Accordion title="Monitor Token Usage">
+Track token usage to stay within limits and optimize costs.
+
+```javascript
+// ✅ Good - Track usage
+const estimateTokens = (text) => Math.ceil(text.length / 4);
+
+const makeRequestWithTracking = async (messages) => {
+  const inputTokens = messages.reduce((sum, msg) => sum + estimateTokens(msg.content), 0);
+  console.log(`Estimated input tokens: ${inputTokens}`);
+  
+  // Make request and track output tokens
+  const response = await makeRequest(messages);
+  const output = await readStreamingResponse(response);
+  const outputTokens = estimateTokens(output);
+  
+  console.log(`Total tokens used: ${inputTokens + outputTokens}`);
+  return output;
+};
+```
+</Accordion>
+</AccordionGroup>
+
+### Security Considerations
+
+<Warning>
+Never expose API keys in client-side code. Always use backend proxies for frontend applications.
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Input Validation" icon="shield-check">
+    Validate and sanitize user inputs before sending to the API
+  </Card>
+  <Card title="Content Filtering" icon="filter">
+    Implement content filtering for user-generated prompts
+  </Card>
+  <Card title="Rate Limiting" icon="clock">
+    Implement application-side rate limiting to prevent abuse
+  </Card>
+  <Card title="Monitoring" icon="eye">
+    Monitor API usage patterns for unusual activity
+  </Card>
+</CardGroup>
+
+## Rate Limits
+
+<Info>
+For detailed information about rate limits, token usage, and optimization strategies, see the [Rate Limits guide](/rate-limits).
+</Info>
+
+- **Token-based limits**: Usage counts toward workspace token quotas
+- **Request rate**: Standard rate limiting applies to prevent abuse
+- **Concurrent requests**: Multiple simultaneous requests are supported
+- **Fair usage**: Excessive usage may be throttled
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Code Examples" icon="code" href="/examples/overview">
+    View complete implementation examples in JavaScript, Python, and cURL
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/rate-limits">
+    Learn about token usage, optimization, and billing
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/errors">
+    Comprehensive guide to error codes and recovery patterns
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/chat/introduction">
+    Complete API reference with schemas and interactive examples
+  </Card>
+</CardGroup>

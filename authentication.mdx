@@ -1,0 +1,472 @@
+---
+title: "Authentication"
+description: "Learn how to securely authenticate your requests using API keys and best practices"
+---
+
+## Overview
+
+The SundayPyjamas AI Suite API uses API keys for authentication. All API requests must include a valid API key in the Authorization header.
+
+<Info>
+API keys provide secure access to the API while maintaining workspace-level isolation and usage tracking.
+</Info>
+
+## API Key Format
+
+API keys follow this specific format:
+
+```
+spj_ai_[64-character-random-string]
+```
+
+**Example:**
+```
+spj_ai_a1b2c3d4e5f6789012345678901234567890abcdef123456789012345678901234
+```
+
+<Warning>
+API keys are only shown once during creation. Store them securely immediately after generation!
+</Warning>
+
+## Getting Your API Key
+
+Follow these steps to generate your API key:
+
+<Steps>
+<Step title="Access Workspace Settings">
+Navigate to your workspace settings in the SundayPyjamas platform.
+</Step>
+
+<Step title="Go to API Tab">
+Click on the "API" tab in your workspace settings.
+</Step>
+
+<Step title="Generate Key">
+Click "Generate API Key" to create a new key.
+</Step>
+
+<Step title="Name Your Key (Optional)">
+Give your API key a descriptive name to help you identify it later.
+</Step>
+
+<Step title="Copy and Store">
+Copy the generated key immediately and store it securely. It won't be shown again!
+</Step>
+</Steps>
+
+## Making Authenticated Requests
+
+Include your API key in the `Authorization` header with the `Bearer` scheme:
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('https://suite.sundaypyjamas.com/api/v1/chat', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer spj_ai_your_api_key_here',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    messages: [{ role: 'user', content: 'Hello!' }]
+  })
+});
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://suite.sundaypyjamas.com/api/v1/chat',
+    headers={
+        'Authorization': 'Bearer spj_ai_your_api_key_here',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'messages': [{'role': 'user', 'content': 'Hello!'}]
+    }
+)
+```
+
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
+```
+</CodeGroup>
+
+## Permissions and Access Control
+
+API keys inherit the permissions of the user who created them:
+
+<CardGroup cols={2}>
+  <Card title="Workspace Access" icon="building">
+    Keys can only access the workspace they were created in
+  </Card>
+  <Card title="Role Requirements" icon="user-shield">
+    Only workspace `owners` and `admins` can create/manage API keys
+  </Card>
+  <Card title="Token Limits" icon="gauge-high">
+    API usage counts toward your workspace token limit
+  </Card>
+  <Card title="Usage Tracking" icon="chart-line">
+    Monitor API key usage through workspace analytics
+  </Card>
+</CardGroup>
+
+## Security Best Practices
+
+### ✅ Do
+
+<AccordionGroup>
+<Accordion title="Store API keys securely">
+- Use environment variables or secure key management systems
+- Never hardcode API keys in your source code
+- Use different API keys for different applications/environments
+
+```bash
+# .env file
+SUNDAYPYJAMAS_API_KEY=spj_ai_your_api_key_here
+```
+
+```javascript
+// In your application
+const apiKey = process.env.SUNDAYPYJAMAS_API_KEY;
+```
+</Accordion>
+
+<Accordion title="Rotate API keys regularly">
+- Generate new API keys periodically
+- Deactivate old keys after replacement
+- Use descriptive names to track key usage
+
+```javascript
+// Example rotation strategy
+const config = {
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY,
+  // Fallback key for seamless rotation
+  fallbackApiKey: process.env.SUNDAYPYJAMAS_FALLBACK_API_KEY
+};
+```
+</Accordion>
+
+<Accordion title="Monitor API key usage">
+- Review usage analytics regularly
+- Set up alerts for unusual activity
+- Track token consumption patterns
+
+<Tip>
+Use workspace analytics to monitor which API keys are consuming the most tokens and identify optimization opportunities.
+</Tip>
+</Accordion>
+</AccordionGroup>
+
+### ❌ Don't
+
+<AccordionGroup>
+<Accordion title="Never expose API keys in client-side code">
+API keys should never be included in frontend JavaScript, mobile apps, or any client-side code where users can access them.
+
+```javascript
+// ❌ Never do this - API key exposed to users
+const apiKey = 'spj_ai_your_api_key_here';
+fetch('/api/chat', {
+  headers: { 'Authorization': `Bearer ${apiKey}` }
+});
+```
+
+```javascript
+// ✅ Use a backend proxy instead
+fetch('/api/chat-proxy', {
+  headers: { 'Authorization': `Bearer ${userSessionToken}` }
+});
+```
+</Accordion>
+
+<Accordion title="Don't share API keys across multiple applications">
+Use separate API keys for different applications to maintain better security and usage tracking.
+
+```javascript
+// ❌ Shared key across projects
+const sharedApiKey = 'spj_ai_shared_key';
+
+// ✅ Separate keys per application
+const config = {
+  webApp: process.env.WEBAPP_API_KEY,
+  mobileApp: process.env.MOBILE_API_KEY,
+  analytics: process.env.ANALYTICS_API_KEY
+};
+```
+</Accordion>
+
+<Accordion title="Never commit API keys to version control">
+Use `.gitignore` to exclude files containing API keys and use environment variables instead.
+
+```bash
+# .gitignore
+.env
+.env.local
+.env.production
+config/secrets.json
+```
+</Accordion>
+</AccordionGroup>
+
+## API Key Management
+
+### Creating API Keys
+
+<Steps>
+<Step title="Navigate to Settings">
+Go to your workspace settings in the SundayPyjamas web interface.
+</Step>
+
+<Step title="Access API Tab">
+Click on the "API" tab to view key management options.
+</Step>
+
+<Step title="Generate New Key">
+Click "Generate API Key" and optionally provide a descriptive name.
+</Step>
+
+<Step title="Save Securely">
+Copy the generated key immediately and store it in your secure key management system.
+</Step>
+</Steps>
+
+### Managing Existing Keys
+
+In your workspace API settings, you can:
+
+- **View all active API keys** with their names and creation dates
+- **Delete keys** you no longer need
+- **Monitor usage** for each individual key
+- **Track token consumption** per API key
+
+<Note>
+API key creation and management is done exclusively through the web interface to ensure proper security and access control.
+</Note>
+
+## Rate Limits and Quotas
+
+<CardGroup cols={2}>
+  <Card title="Per Workspace Limit" icon="building">
+    Maximum 10 active API keys per workspace
+  </Card>
+  <Card title="Token-based Usage" icon="coins">
+    API usage counts toward workspace token quotas
+  </Card>
+  <Card title="Request Rate Limits" icon="clock">
+    Standard rate limiting applies to all API endpoints
+  </Card>
+  <Card title="Fair Usage Policy" icon="balance-scale">
+    Usage monitoring to ensure fair access for all users
+  </Card>
+</CardGroup>
+
+## Error Responses
+
+### Invalid API Key (401)
+
+```json
+{
+  "error": "Invalid API key"
+}
+```
+
+**Common causes:**
+- API key doesn't exist or has been deleted
+- Incorrect API key format
+- Missing or malformed Authorization header
+
+**Solution:**
+- Verify your API key is correct and active
+- Check the Authorization header format: `Bearer spj_ai_...`
+- Generate a new API key if necessary
+
+### Insufficient Permissions (403)
+
+```json
+{
+  "error": "Insufficient permissions to create API keys"
+}
+```
+
+**Cause:** User doesn't have required role (owner/admin) for API key management
+
+**Solution:** Contact your workspace owner to grant appropriate permissions
+
+### Token Limit Exceeded (403)
+
+```json
+{
+  "error": "Token limit exceeded"
+}
+```
+
+**Solutions:**
+- Wait for your monthly token reset
+- Upgrade your subscription plan
+- Optimize prompts to reduce token usage
+
+## Environment Variables Best Practices
+
+### Local Development
+
+Create a `.env` file for local development:
+
+```bash
+# .env
+SUNDAYPYJAMAS_API_KEY=spj_ai_your_development_key_here
+SUNDAYPYJAMAS_API_URL=https://suite.sundaypyjamas.com/api/v1
+```
+
+### Production Deployment
+
+Set environment variables in your deployment platform:
+
+<Tabs>
+<Tab title="Vercel">
+```bash
+vercel env add SUNDAYPYJAMAS_API_KEY
+```
+</Tab>
+
+<Tab title="Netlify">
+```bash
+netlify env:set SUNDAYPYJAMAS_API_KEY spj_ai_your_key_here
+```
+</Tab>
+
+<Tab title="Heroku">
+```bash
+heroku config:set SUNDAYPYJAMAS_API_KEY=spj_ai_your_key_here
+```
+</Tab>
+
+<Tab title="AWS Lambda">
+```bash
+aws lambda update-function-configuration \
+  --function-name your-function \
+  --environment Variables='{SUNDAYPYJAMAS_API_KEY=spj_ai_your_key_here}'
+```
+</Tab>
+</Tabs>
+
+### Access in Code
+
+<CodeGroup>
+```javascript Node.js
+const apiKey = process.env.SUNDAYPYJAMAS_API_KEY;
+
+if (!apiKey) {
+  throw new Error('SUNDAYPYJAMAS_API_KEY environment variable is required');
+}
+```
+
+```python Python
+import os
+
+api_key = os.getenv('SUNDAYPYJAMAS_API_KEY')
+
+if not api_key:
+    raise ValueError("SUNDAYPYJAMAS_API_KEY environment variable is required")
+```
+
+```go Go
+package main
+
+import (
+    "os"
+    "log"
+)
+
+func main() {
+    apiKey := os.Getenv("SUNDAYPYJAMAS_API_KEY")
+    if apiKey == "" {
+        log.Fatal("SUNDAYPYJAMAS_API_KEY environment variable is required")
+    }
+}
+```
+</CodeGroup>
+
+## Testing Authentication
+
+### Verify API Key
+
+Test your API key with a simple request:
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Test"}]}' \
+  -w "\nHTTP Status: %{http_code}\n"
+```
+
+```javascript JavaScript
+async function testApiKey() {
+  try {
+    const response = await fetch('https://suite.sundaypyjamas.com/api/v1/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.SUNDAYPYJAMAS_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: 'Test' }]
+      })
+    });
+
+    if (response.ok) {
+      console.log('✅ API key is valid');
+    } else {
+      console.log('❌ API key is invalid');
+    }
+  } catch (error) {
+    console.error('Connection error:', error);
+  }
+}
+```
+
+```python Python
+import requests
+
+def test_api_key():
+    try:
+        response = requests.post(
+            'https://suite.sundaypyjamas.com/api/v1/chat',
+            headers={
+                'Authorization': f'Bearer {os.getenv("SUNDAYPYJAMAS_API_KEY")}',
+                'Content-Type': 'application/json'
+            },
+            json={'messages': [{'role': 'user', 'content': 'Test'}]}
+        )
+        
+        if response.ok:
+            print('✅ API key is valid')
+        else:
+            print('❌ API key is invalid')
+            
+    except requests.exceptions.RequestException as e:
+        print(f'Connection error: {e}')
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/chat-api">
+    Start making requests to the Chat API with your authenticated key
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/rate-limits">
+    Understand usage limits and optimization strategies
+  </Card>
+  <Card title="Code Examples" icon="code" href="/examples/overview">
+    View complete implementation examples with authentication
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/errors">
+    Learn how to handle authentication errors gracefully
+  </Card>
+</CardGroup>

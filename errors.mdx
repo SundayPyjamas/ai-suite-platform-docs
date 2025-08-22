@@ -1,0 +1,963 @@
+---
+title: "Error Handling"
+description: "Comprehensive guide to understanding and handling errors in the SundayPyjamas AI Suite API"
+---
+
+## Overview
+
+This guide covers all possible errors you may encounter when using the SundayPyjamas AI Suite API, along with best practices for handling them gracefully in your applications.
+
+<Info>
+All API errors follow a consistent JSON format with human-readable error messages and appropriate HTTP status codes.
+</Info>
+
+## Error Response Format
+
+### Standard Error Format
+
+All API errors return a consistent JSON structure:
+
+```json
+{
+  "error": "Human-readable error message"
+}
+```
+
+### Enhanced Error Format
+
+Some errors may include additional fields for better debugging:
+
+```json
+{
+  "error": "Detailed error message",
+  "code": "ERROR_CODE",
+  "details": {
+    "field": "additional context"
+  }
+}
+```
+
+## HTTP Status Codes
+
+### 400 Bad Request
+
+Invalid request format or parameters.
+
+<AccordionGroup>
+<Accordion title="Missing Messages Array">
+```json
+{
+  "error": "Messages array is required"
+}
+```
+
+**Cause:** Request body doesn't include a `messages` array
+
+**Solution:** Ensure your request includes a valid `messages` array
+
+<CodeGroup>
+```javascript ❌ Wrong
+const request = { model: "llama-3.3-70b-versatile" };
+```
+
+```javascript ✅ Correct
+const request = {
+  messages: [{ role: "user", content: "Hello" }],
+  model: "llama-3.3-70b-versatile"
+};
+```
+</CodeGroup>
+</Accordion>
+
+<Accordion title="Invalid Message Format">
+```json
+{
+  "error": "Last message must have valid content"
+}
+```
+
+**Cause:** Message missing required `content` field or empty content
+
+**Solution:** Ensure all messages have valid `role` and `content` fields
+
+<CodeGroup>
+```javascript ❌ Wrong
+const messages = [
+  { role: "user" }, // Missing content
+  { role: "user", content: "" } // Empty content
+];
+```
+
+```javascript ✅ Correct
+const messages = [
+  { role: "user", content: "Hello, how can you help me?" }
+];
+```
+</CodeGroup>
+</Accordion>
+
+<Accordion title="Invalid Request Body">
+```json
+{
+  "error": "Invalid request body"
+}
+```
+
+**Cause:** Malformed JSON or invalid Content-Type
+
+**Solution:** Ensure proper JSON formatting and Content-Type header
+
+<CodeGroup>
+```bash ❌ Wrong - Missing Content-Type
+curl -X POST /api/v1/chat \
+  -H "Authorization: Bearer API_KEY" \
+  -d '{"messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+```bash ✅ Correct
+curl -X POST /api/v1/chat \
+  -H "Authorization: Bearer API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Hello"}]}'
+```
+</CodeGroup>
+</Accordion>
+</AccordionGroup>
+
+### 401 Unauthorized
+
+Authentication issues with your API key.
+
+<AccordionGroup>
+<Accordion title="Invalid API Key">
+```json
+{
+  "error": "Invalid API key"
+}
+```
+
+**Common Causes:**
+- API key doesn't exist or has been deleted
+- API key format is incorrect  
+- API key has been deactivated
+
+**Solutions:**
+- Verify your API key is correct and active
+- Check the key format: `spj_ai_[64-character-string]`
+- Generate a new API key if needed
+
+```javascript
+// Check API key format
+function validateApiKeyFormat(key) {
+  return /^spj_ai_[a-zA-Z0-9_]{32,}$/.test(key);
+}
+
+if (!validateApiKeyFormat(apiKey)) {
+  console.error("Invalid API key format");
+}
+```
+</Accordion>
+
+<Accordion title="Missing Authorization Header">
+```json
+{
+  "error": "Invalid API key"
+}
+```
+
+**Cause:** Missing or malformed Authorization header
+
+**Solution:** Include proper Bearer token authorization
+
+<CodeGroup>
+```javascript ❌ Wrong
+fetch('/api/v1/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ messages })
+});
+```
+
+```javascript ✅ Correct
+fetch('/api/v1/chat', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ messages })
+});
+```
+</CodeGroup>
+</Accordion>
+</AccordionGroup>
+
+### 403 Forbidden
+
+Permission or limit issues.
+
+<AccordionGroup>
+<Accordion title="Token Limit Exceeded">
+```json
+{
+  "error": "Token limit exceeded"
+}
+```
+
+**Cause:** Workspace has exceeded monthly token quota
+
+**Solutions:**
+- Wait for monthly reset
+- Upgrade subscription plan  
+- Optimize prompts to use fewer tokens
+
+```javascript
+async function handleTokenLimit() {
+  try {
+    const response = await chatAPI(messages);
+    return response;
+  } catch (error) {
+    if (error.message.includes('Token limit exceeded')) {
+      // Implement graceful degradation
+      return "I'm temporarily unavailable due to usage limits. Please try again later.";
+    }
+    throw error;
+  }
+}
+```
+</Accordion>
+
+<Accordion title="Insufficient Permissions">
+```json
+{
+  "error": "Insufficient permissions to create API keys"
+}
+```
+
+**Cause:** User doesn't have required role (owner/admin) for API key management
+
+**Solution:** Contact workspace owner to grant appropriate permissions
+</Accordion>
+</AccordionGroup>
+
+### 404 Not Found
+
+Resource doesn't exist.
+
+<AccordionGroup>
+<Accordion title="API Key Not Found">
+```json
+{
+  "error": "API key not found"
+}
+```
+
+**Cause:** Attempting to delete or access a non-existent API key
+
+**Solution:** Verify the API key ID is correct
+</Accordion>
+
+<Accordion title="Endpoint Not Found">
+**Cause:** Invalid API endpoint URL
+
+**Solution:** Check the API documentation for correct endpoints
+
+<CodeGroup>
+```javascript ❌ Wrong endpoint
+const response = await fetch('/api/v2/chat'); // v2 doesn't exist
+```
+
+```javascript ✅ Correct endpoint
+const response = await fetch('/api/v1/chat');
+```
+</CodeGroup>
+</Accordion>
+</AccordionGroup>
+
+### 429 Too Many Requests
+
+Rate limiting applied.
+
+```json
+{
+  "error": "Rate limit exceeded"
+}
+```
+
+**Cause:** Making requests too quickly
+
+**Solution:** Implement exponential backoff and retry logic
+
+```javascript
+async function retryWithBackoff(fn, maxRetries = 3) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error.status === 429 && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s, 8s
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+```
+
+### 500 Internal Server Error
+
+Server-side issues.
+
+<AccordionGroup>
+<Accordion title="AI Service Error">
+```json
+{
+  "error": "Failed to generate response"
+}
+```
+
+**Causes:**
+- AI model temporarily unavailable
+- Server overload
+- Temporary service disruption
+
+**Solution:** Implement retry logic with exponential backoff
+</Accordion>
+
+<Accordion title="AI Model Initialization Error">
+```json
+{
+  "error": "Failed to initialize AI model"
+}
+```
+
+**Cause:** AI service configuration issues
+
+**Solution:** Retry the request; contact support if persistent
+</Accordion>
+</AccordionGroup>
+
+### 502 Bad Gateway
+
+```json
+{
+  "error": "AI service is temporarily unavailable"
+}
+```
+
+**Cause:** Upstream AI service is down
+
+**Solution:** Retry with exponential backoff
+
+### 503 Service Unavailable
+
+```json
+{
+  "error": "Service temporarily unavailable"
+}
+```
+
+**Cause:** Scheduled maintenance or high load
+
+**Solution:** Wait and retry; check status page
+
+## Error Handling Patterns
+
+### Basic Error Handling
+
+<CodeGroup>
+```javascript JavaScript
+async function basicChatRequest(messages) {
+  try {
+    const response = await fetch('/api/v1/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ messages })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`API Error (${response.status}): ${errorData.error}`);
+    }
+
+    return await response.text();
+  } catch (error) {
+    console.error('Chat request failed:', error.message);
+    throw error;
+  }
+}
+```
+
+```python Python
+import requests
+
+def basic_chat_request(messages):
+    try:
+        response = requests.post(
+            'https://suite.sundaypyjamas.com/api/v1/chat',
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={'messages': messages}
+        )
+        
+        response.raise_for_status()
+        return response.text
+        
+    except requests.exceptions.HTTPError as e:
+        error_data = e.response.json() if e.response else {}
+        error_msg = error_data.get('error', 'Unknown error')
+        print(f'API Error ({e.response.status_code}): {error_msg}')
+        raise
+    except requests.exceptions.RequestException as e:
+        print(f'Request failed: {e}')
+        raise
+```
+</CodeGroup>
+
+### Comprehensive Error Handling
+
+<CodeGroup>
+```javascript JavaScript - Robust Client
+class APIError extends Error {
+  constructor(message, status, code = null) {
+    super(message);
+    this.name = 'APIError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+class SundayPyjamasClient {
+  constructor(apiKey, apiUrl, maxRetries = 3) {
+    this.apiKey = apiKey;
+    this.apiUrl = apiUrl;
+    this.maxRetries = maxRetries;
+  }
+
+  async chat(messages, options = {}) {
+    const { timeout = 30000 } = options;
+    
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+        const response = await fetch(`${this.apiUrl}/chat`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ messages }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          await this.handleErrorResponse(response, attempt);
+        }
+
+        return await this.readStreamingResponse(response);
+
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          throw new APIError('Request timeout', 408);
+        }
+        
+        if (attempt === this.maxRetries) {
+          throw error;
+        }
+        
+        // Wait before retry (exponential backoff)
+        await this.wait(Math.pow(2, attempt) * 1000);
+      }
+    }
+  }
+
+  async handleErrorResponse(response, attempt) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    
+    switch (response.status) {
+      case 400:
+        throw new APIError(errorData.error, 400, 'BAD_REQUEST');
+      
+      case 401:
+        throw new APIError('Invalid API key', 401, 'UNAUTHORIZED');
+      
+      case 403:
+        if (errorData.error.includes('Token limit')) {
+          throw new APIError('Token limit exceeded', 403, 'TOKEN_LIMIT_EXCEEDED');
+        }
+        throw new APIError(errorData.error, 403, 'FORBIDDEN');
+      
+      case 404:
+        throw new APIError('Endpoint not found', 404, 'NOT_FOUND');
+      
+      case 429:
+        if (attempt < this.maxRetries) {
+          // Don't throw immediately for rate limits, let retry logic handle it
+          await this.wait(Math.pow(2, attempt + 1) * 1000);
+          return;
+        }
+        throw new APIError('Rate limit exceeded', 429, 'RATE_LIMITED');
+      
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        if (attempt < this.maxRetries) {
+          // Retry server errors
+          return;
+        }
+        throw new APIError('Server error', response.status, 'SERVER_ERROR');
+      
+      default:
+        throw new APIError(errorData.error || 'Unknown error', response.status);
+    }
+  }
+
+  async readStreamingResponse(response) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        fullResponse += chunk;
+      }
+      return fullResponse;
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+// Usage with comprehensive error handling
+const client = new SundayPyjamasClient(apiKey, apiUrl);
+
+try {
+  const response = await client.chat(messages);
+  console.log('Success:', response);
+} catch (error) {
+  if (error instanceof APIError) {
+    switch (error.code) {
+      case 'UNAUTHORIZED':
+        console.error('Authentication failed. Check your API key.');
+        break;
+      case 'TOKEN_LIMIT_EXCEEDED':
+        console.error('Monthly token limit reached. Upgrade plan or wait for reset.');
+        break;
+      case 'RATE_LIMITED':
+        console.error('Too many requests. Please slow down.');
+        break;
+      case 'BAD_REQUEST':
+        console.error('Invalid request:', error.message);
+        break;
+      default:
+        console.error('API error:', error.message);
+    }
+  } else {
+    console.error('Unexpected error:', error.message);
+  }
+}
+```
+
+```python Python - Robust Client
+import requests
+import time
+import random
+from typing import List, Dict, Optional
+
+class APIError(Exception):
+    def __init__(self, message: str, status_code: int, error_code: Optional[str] = None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.error_code = error_code
+
+class SundayPyjamasClient:
+    def __init__(self, api_key: str, api_url: str, max_retries: int = 3):
+        self.api_key = api_key
+        self.api_url = api_url
+        self.max_retries = max_retries
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        })
+
+    def chat(self, messages: List[Dict], **kwargs) -> str:
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self.session.post(
+                    f'{self.api_url}/chat',
+                    json={'messages': messages, **kwargs},
+                    timeout=30,
+                    stream=True
+                )
+                
+                self._handle_error_response(response, attempt)
+                
+                # Read streaming response
+                full_response = ''
+                for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+                    if chunk:
+                        full_response += chunk
+                
+                return full_response
+                
+            except APIError as e:
+                if e.status_code in [400, 401, 403, 404] or attempt == self.max_retries:
+                    raise e
+                
+                # Exponential backoff with jitter
+                delay = (2 ** attempt) + random.uniform(0, 1)
+                time.sleep(delay)
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == self.max_retries:
+                    raise APIError(f"Request failed: {str(e)}", 0)
+                
+                delay = (2 ** attempt) + random.uniform(0, 1)
+                time.sleep(delay)
+
+    def _handle_error_response(self, response: requests.Response, attempt: int):
+        if response.ok:
+            return
+            
+        try:
+            error_data = response.json()
+            error_message = error_data.get('error', 'Unknown error')
+        except ValueError:
+            error_message = f"HTTP {response.status_code} error"
+
+        error_codes = {
+            400: 'BAD_REQUEST',
+            401: 'UNAUTHORIZED', 
+            403: 'FORBIDDEN',
+            404: 'NOT_FOUND',
+            429: 'RATE_LIMITED',
+            500: 'SERVER_ERROR',
+            502: 'BAD_GATEWAY',
+            503: 'SERVICE_UNAVAILABLE'
+        }
+
+        error_code = error_codes.get(response.status_code)
+        
+        # For server errors and rate limits, allow retries
+        if response.status_code in [429, 500, 502, 503, 504] and attempt < self.max_retries:
+            return  # Will be retried
+            
+        raise APIError(error_message, response.status_code, error_code)
+
+# Usage
+client = SundayPyjamasClient(api_key, api_url)
+
+try:
+    response = client.chat([{'role': 'user', 'content': 'Hello'}])
+    print(response)
+except APIError as e:
+    if e.error_code == 'UNAUTHORIZED':
+        print("Invalid API key. Please check your configuration.")
+    elif e.error_code == 'FORBIDDEN':
+        print("Access denied. Check permissions or token limits.")
+    elif e.error_code == 'RATE_LIMITED':
+        print("Rate limited. Please wait before making more requests.")
+    else:
+        print(f"API error: {e}")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+```
+</CodeGroup>
+
+## Error Recovery Strategies
+
+### Graceful Degradation
+
+```javascript
+class ChatService {
+  constructor(apiKey) {
+    this.client = new SundayPyjamasClient(apiKey);
+    this.fallbackResponses = {
+      'TOKEN_LIMIT_EXCEEDED': 'I\'m temporarily unavailable due to usage limits. Please try again later.',
+      'RATE_LIMITED': 'I\'m receiving too many requests. Please wait a moment and try again.',
+      'SERVER_ERROR': 'I\'m experiencing technical difficulties. Please try again in a few minutes.',
+      'UNAUTHORIZED': 'There\'s an authentication issue. Please contact support.'
+    };
+  }
+
+  async chat(messages, options = {}) {
+    try {
+      return await this.client.chat(messages, options);
+    } catch (error) {
+      if (error instanceof APIError && this.fallbackResponses[error.code]) {
+        return this.fallbackResponses[error.code];
+      }
+      
+      // Log error for debugging but provide user-friendly message
+      console.error('Chat service error:', error);
+      return 'I\'m currently unavailable. Please try again later.';
+    }
+  }
+}
+```
+
+### Circuit Breaker Pattern
+
+```javascript
+class CircuitBreaker {
+  constructor(failureThreshold = 5, resetTimeout = 60000) {
+    this.failureThreshold = failureThreshold;
+    this.resetTimeout = resetTimeout;
+    this.failureCount = 0;
+    this.lastFailureTime = null;
+    this.state = 'CLOSED'; // CLOSED, OPEN, HALF_OPEN
+  }
+
+  async execute(fn) {
+    if (this.state === 'OPEN') {
+      if (Date.now() - this.lastFailureTime > this.resetTimeout) {
+        this.state = 'HALF_OPEN';
+      } else {
+        throw new Error('Circuit breaker is OPEN');
+      }
+    }
+
+    try {
+      const result = await fn();
+      this.onSuccess();
+      return result;
+    } catch (error) {
+      this.onFailure();
+      throw error;
+    }
+  }
+
+  onSuccess() {
+    this.failureCount = 0;
+    this.state = 'CLOSED';
+  }
+
+  onFailure() {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+    
+    if (this.failureCount >= this.failureThreshold) {
+      this.state = 'OPEN';
+    }
+  }
+}
+
+// Usage
+const circuitBreaker = new CircuitBreaker(3, 30000); // 3 failures, 30s timeout
+
+async function robustChatRequest(messages) {
+  try {
+    return await circuitBreaker.execute(async () => {
+      return await client.chat(messages);
+    });
+  } catch (error) {
+    if (error.message === 'Circuit breaker is OPEN') {
+      return 'Service is temporarily unavailable. Please try again later.';
+    }
+    throw error;
+  }
+}
+```
+
+### Retry with Jitter
+
+```javascript
+async function retryWithJitter(fn, maxRetries = 3, baseDelay = 1000) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Don't retry on client errors (4xx)
+      if (error instanceof APIError && error.status >= 400 && error.status < 500) {
+        throw error;
+      }
+      
+      // Exponential backoff with jitter
+      const delay = baseDelay * Math.pow(2, attempt);
+      const jitter = Math.random() * 0.1 * delay; // 10% jitter
+      await new Promise(resolve => setTimeout(resolve, delay + jitter));
+    }
+  }
+}
+```
+
+## Debugging Tips
+
+### Enable Detailed Logging
+
+```javascript
+class DebugClient extends SundayPyjamasClient {
+  async chat(messages, options = {}) {
+    const requestId = Math.random().toString(36).substring(7);
+    
+    console.log(`[${requestId}] Starting chat request`, {
+      messageCount: messages.length,
+      totalChars: messages.reduce((sum, m) => sum + m.content.length, 0),
+      options
+    });
+
+    try {
+      const startTime = Date.now();
+      const response = await super.chat(messages, options);
+      const duration = Date.now() - startTime;
+      
+      console.log(`[${requestId}] Chat request successful`, {
+        duration: `${duration}ms`,
+        responseLength: response.length
+      });
+      
+      return response;
+    } catch (error) {
+      console.error(`[${requestId}] Chat request failed`, {
+        error: error.message,
+        status: error.status,
+        code: error.code
+      });
+      throw error;
+    }
+  }
+}
+```
+
+### Test Error Scenarios
+
+<CodeGroup>
+```bash Test Invalid API Key
+curl -X POST "${API_URL}/chat" \
+  -H "Authorization: Bearer invalid_key" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "test"}]}'
+```
+
+```bash Test Missing Messages
+curl -X POST "${API_URL}/chat" \
+  -H "Authorization: Bearer ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```bash Test Malformed JSON
+curl -X POST "${API_URL}/chat" \
+  -H "Authorization: Bearer ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "test"'
+```
+</CodeGroup>
+
+### Error Monitoring
+
+```javascript
+class ErrorMonitor {
+  constructor() {
+    this.errors = [];
+    this.errorCounts = new Map();
+  }
+
+  logError(error, context = {}) {
+    const errorInfo = {
+      timestamp: new Date().toISOString(),
+      message: error.message,
+      status: error.status,
+      code: error.code,
+      context
+    };
+    
+    this.errors.push(errorInfo);
+    
+    // Count error types
+    const errorKey = `${error.status}-${error.code}`;
+    this.errorCounts.set(errorKey, (this.errorCounts.get(errorKey) || 0) + 1);
+    
+    // Alert on high error rates
+    if (this.errorCounts.get(errorKey) > 10) {
+      console.warn(`High error rate detected: ${errorKey}`);
+    }
+  }
+
+  getErrorSummary() {
+    return {
+      totalErrors: this.errors.length,
+      errorBreakdown: Object.fromEntries(this.errorCounts),
+      recentErrors: this.errors.slice(-10)
+    };
+  }
+}
+
+const errorMonitor = new ErrorMonitor();
+
+// Use in your error handling
+catch (error) {
+  errorMonitor.logError(error, { userId, requestId });
+  // ... handle error
+}
+```
+
+## Best Practices Summary
+
+<CardGroup cols={2}>
+  <Card title="Always Handle Errors" icon="shield-check">
+    Implement comprehensive error handling for all API calls
+  </Card>
+  <Card title="Use Exponential Backoff" icon="clock">
+    Retry with increasing delays for transient errors
+  </Card>
+  <Card title="Graceful Degradation" icon="arrow-down">
+    Provide fallback responses when the API is unavailable
+  </Card>
+  <Card title="Monitor Error Patterns" icon="chart-line">
+    Track error frequencies to identify and fix issues
+  </Card>
+  <Card title="Validate Inputs" icon="check-square">
+    Validate requests before sending to avoid 400 errors
+  </Card>
+  <Card title="Secure API Keys" icon="key">
+    Protect API keys and handle auth errors appropriately
+  </Card>
+  <Card title="Log for Debugging" icon="bug">
+    Implement detailed logging for troubleshooting
+  </Card>
+  <Card title="Circuit Breaker" icon="power-off">
+    Use circuit breakers to prevent cascade failures
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Learn about API key management and security
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/rate-limits">
+    Understand usage limits and optimization
+  </Card>
+  <Card title="Chat API" icon="comments" href="/chat-api">
+    Complete API documentation with examples
+  </Card>
+  <Card title="Code Examples" icon="code" href="/examples/overview">
+    See robust implementations with error handling
+  </Card>
+</CardGroup>

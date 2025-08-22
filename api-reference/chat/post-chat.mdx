@@ -1,0 +1,639 @@
+---
+title: "POST /chat"
+api: "POST https://suite.sundaypyjamas.com/api/v1/chat"
+description: "Send messages to AI models and receive streaming text responses for conversational AI and content generation"
+---
+
+## Overview
+
+The POST /chat endpoint is the primary way to interact with SundayPyjamas AI models. It accepts a conversation history and returns an AI-generated response as a streaming text.
+
+<Info>
+All responses are streamed in real-time for better user experience in conversational applications.
+</Info>
+
+## Authentication
+
+<ParamField header="Authorization" type="string" required>
+Bearer token with your API key. Format: `Bearer spj_ai_your_api_key_here`
+</ParamField>
+
+## Request Body
+
+<ParamField body="messages" type="Array<Message>" required>
+Array of conversation messages. Must contain at least one message with valid content.
+
+<Expandable title="Message Object">
+  <ParamField body="role" type="string" required>
+  The role of the message sender. Must be one of:
+  - `user` - Messages from the user/human
+  - `assistant` - Previous AI responses in the conversation
+  - `system` - System instructions to guide AI behavior
+  </ParamField>
+  
+  <ParamField body="content" type="string" required>
+  The message content. Cannot be empty or null.
+  </ParamField>
+</Expandable>
+</ParamField>
+
+<ParamField body="model" type="string" default="llama-3.3-70b-versatile">
+AI model to use for generating the response. Currently available models:
+- `llama-3.3-70b-versatile` - High-quality general-purpose model (default)
+</ParamField>
+
+## Response
+
+### Headers
+
+The response includes the following headers for streaming:
+
+```http
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+```
+
+### Body
+
+<ResponseField name="response" type="string">
+Streaming text response from the AI model. The complete response is built by concatenating all streamed chunks.
+</ResponseField>
+
+## Examples
+
+### Basic Request
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Write a professional email greeting."
+      }
+    ]
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```text Response
+Hello! Here's a professional email greeting for you:
+
+Dear [Recipient's Name],
+
+I hope this email finds you well. I wanted to reach out to discuss [purpose of email].
+
+Best regards,
+[Your Name]
+```
+</ResponseExample>
+
+### With System Message
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a technical writer who creates clear, concise documentation."
+      },
+      {
+        "role": "user",
+        "content": "Explain what an API is in simple terms."
+      }
+    ]
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```text Response
+An API (Application Programming Interface) is like a waiter in a restaurant:
+
+- You (the customer) make a request for food
+- The waiter takes your order to the kitchen
+- The kitchen prepares your meal  
+- The waiter brings back your food
+
+Similarly, an API:
+- Receives requests from applications
+- Processes those requests
+- Returns the requested data or performs actions
+- Enables different software systems to communicate
+
+APIs make it possible for apps on your phone to get weather data, social media feeds, or payment processing without having to build those services themselves.
+```
+</ResponseExample>
+
+### Multi-turn Conversation
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is machine learning?"
+      },
+      {
+        "role": "assistant",
+        "content": "Machine learning is a subset of artificial intelligence (AI) that enables computers to learn and improve from experience without being explicitly programmed for every task."
+      },
+      {
+        "role": "user",
+        "content": "Can you give me a simple example?"
+      }
+    ]
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```text Response
+Sure! Here's a simple example:
+
+**Email Spam Detection**
+
+1. **Training**: You show the computer thousands of emails labeled as "spam" or "not spam"
+2. **Learning**: The computer finds patterns - spam emails often have words like "FREE!", "URGENT!", multiple exclamation marks, or suspicious links
+3. **Prediction**: When a new email arrives, the computer uses these learned patterns to predict if it's spam or not
+
+The computer "learned" to recognize spam without being programmed with explicit rules like "if email contains 'FREE!' then it's spam." Instead, it discovered these patterns by analyzing examples.
+
+Other everyday examples:
+- Netflix recommending movies based on what you've watched
+- Your phone's autocorrect learning your typing patterns
+- Banks detecting fraudulent transactions
+```
+</ResponseExample>
+
+### Specifying Model
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Generate a Python function to calculate fibonacci numbers."
+      }
+    ],
+    "model": "llama-3.3-70b-versatile"
+  }'
+```
+</RequestExample>
+
+### Content Generation
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a marketing copywriter. Write compelling copy that drives action and focuses on benefits."
+      },
+      {
+        "role": "user",
+        "content": "Write marketing copy for a productivity app targeting remote workers. Include a headline, 3 key benefits, and a call-to-action."
+      }
+    ]
+  }'
+```
+</RequestExample>
+
+## Error Responses
+
+### 400 Bad Request
+
+<ResponseExample>
+```json Missing Messages
+{
+  "error": "Messages array is required"
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json Invalid Message Format
+{
+  "error": "Last message must have valid content"
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json Invalid Request Body
+{
+  "error": "Invalid request body"
+}
+```
+</ResponseExample>
+
+### 401 Unauthorized
+
+<ResponseExample>
+```json Invalid API Key
+{
+  "error": "Invalid API key"
+}
+```
+</ResponseExample>
+
+### 403 Forbidden
+
+<ResponseExample>
+```json Token Limit Exceeded
+{
+  "error": "Token limit exceeded"
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json Insufficient Permissions
+{
+  "error": "Insufficient permissions"
+}
+```
+</ResponseExample>
+
+### 429 Too Many Requests
+
+<ResponseExample>
+```json Rate Limited
+{
+  "error": "Rate limit exceeded"
+}
+```
+</ResponseExample>
+
+### 500 Internal Server Error
+
+<ResponseExample>
+```json Server Error
+{
+  "error": "Failed to generate response"
+}
+```
+</ResponseExample>
+
+## Streaming Implementation
+
+### JavaScript/TypeScript
+
+```typescript
+async function streamChatResponse(messages: ChatMessage[]) {
+  const response = await fetch('/api/v1/chat', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ messages })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error);
+  }
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let fullResponse = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    const chunk = decoder.decode(value);
+    fullResponse += chunk;
+    
+    // Process each chunk in real-time
+    onChunk(chunk);
+  }
+
+  return fullResponse;
+}
+```
+
+### Python
+
+```python
+import requests
+
+def stream_chat_response(messages):
+    response = requests.post(
+        'https://suite.sundaypyjamas.com/api/v1/chat',
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        },
+        json={'messages': messages},
+        stream=True
+    )
+    
+    response.raise_for_status()
+    
+    full_response = ''
+    for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+        if chunk:
+            full_response += chunk
+            # Process each chunk in real-time
+            print(chunk, end='', flush=True)
+    
+    return full_response
+```
+
+### Go
+
+```go
+package main
+
+import (
+    "bufio"
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "net/http"
+)
+
+func streamChatResponse(messages []Message) (string, error) {
+    requestBody := ChatRequest{Messages: messages}
+    jsonData, _ := json.Marshal(requestBody)
+    
+    req, _ := http.NewRequest("POST", "https://suite.sundaypyjamas.com/api/v1/chat", 
+        bytes.NewBuffer(jsonData))
+    req.Header.Set("Authorization", "Bearer "+apiKey)
+    req.Header.Set("Content-Type", "application/json")
+    
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        return "", err
+    }
+    defer resp.Body.Close()
+    
+    if resp.StatusCode != http.StatusOK {
+        // Handle error response
+        var errorResp ErrorResponse
+        json.NewDecoder(resp.Body).Decode(&errorResp)
+        return "", fmt.Errorf("API error: %s", errorResp.Error)
+    }
+    
+    scanner := bufio.NewScanner(resp.Body)
+    var fullResponse strings.Builder
+    
+    for scanner.Scan() {
+        chunk := scanner.Text()
+        fullResponse.WriteString(chunk)
+        // Process each chunk in real-time
+        fmt.Print(chunk)
+    }
+    
+    return fullResponse.String(), nil
+}
+```
+
+## Request Validation
+
+### Message Array Requirements
+
+<AccordionGroup>
+<Accordion title="Valid Message Structure">
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Your message here"
+    }
+  ]
+}
+```
+
+✅ **Valid**: Contains required fields with proper types
+</Accordion>
+
+<Accordion title="Invalid Examples">
+```json
+{
+  "messages": []
+}
+```
+❌ **Invalid**: Empty messages array
+
+```json
+{
+  "messages": [
+    {
+      "role": "user"
+    }
+  ]
+}
+```
+❌ **Invalid**: Missing content field
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": ""
+    }
+  ]
+}
+```
+❌ **Invalid**: Empty content string
+
+```json
+{
+  "messages": [
+    {
+      "role": "invalid_role",
+      "content": "Hello"
+    }
+  ]
+}
+```
+❌ **Invalid**: Invalid role value
+</Accordion>
+</AccordionGroup>
+
+### Content Length Limits
+
+<Warning>
+Very long requests may hit token limits. Consider breaking large content into smaller chunks or summarizing previous context.
+</Warning>
+
+**Practical limits:**
+- **Single message**: ~10,000 characters recommended
+- **Total conversation**: ~20,000 characters for optimal performance
+- **Token estimation**: ~4 characters per token
+
+## Rate Limiting Details
+
+<CardGroup cols={2}>
+  <Card title="Token Usage" icon="coins">
+    Input + output tokens count toward workspace limits
+  </Card>
+  <Card title="Request Rate" icon="clock">
+    No hard limits, but monitored for abuse
+  </Card>
+  <Card title="Concurrent Requests" icon="layer-group">
+    Multiple simultaneous requests supported
+  </Card>
+  <Card title="Fair Usage" icon="balance-scale">
+    Excessive usage may be throttled
+  </Card>
+</CardGroup>
+
+### Optimization Tips
+
+<Tip>
+To optimize your usage:
+- Use clear, concise prompts
+- Trim conversation history to relevant context
+- Batch similar requests when possible
+- Monitor token usage through workspace analytics
+</Tip>
+
+## Testing with Different Tools
+
+### Postman
+
+```json
+POST https://suite.sundaypyjamas.com/api/v1/chat
+Headers:
+  Authorization: Bearer spj_ai_your_api_key_here
+  Content-Type: application/json
+  
+Body (raw JSON):
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Test message"
+    }
+  ]
+}
+```
+
+### HTTPie
+
+```bash
+http POST https://suite.sundaypyjamas.com/api/v1/chat \
+  Authorization:"Bearer spj_ai_your_api_key_here" \
+  messages:='[{"role": "user", "content": "Test message"}]'
+```
+
+### Insomnia
+
+```json
+{
+  "method": "POST",
+  "url": "https://suite.sundaypyjamas.com/api/v1/chat",
+  "headers": {
+    "Authorization": "Bearer spj_ai_your_api_key_here",
+    "Content-Type": "application/json"
+  },
+  "body": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Test message"
+      }
+    ]
+  }
+}
+```
+
+## Performance Considerations
+
+### Response Times
+
+Typical response times vary based on:
+- **Request complexity**: Simple queries respond faster
+- **Response length**: Longer responses take more time
+- **Server load**: Peak times may have slightly longer latencies
+
+**Expected ranges:**
+- Simple queries: 1-3 seconds
+- Complex content generation: 3-10 seconds
+- Very long responses: 10-30 seconds
+
+### Best Practices
+
+<AccordionGroup>
+<Accordion title="Optimize for Speed">
+- Use specific, focused prompts
+- Limit conversation history to relevant context
+- Request shorter responses when appropriate
+- Use streaming to show progress to users
+</Accordion>
+
+<Accordion title="Handle Timeouts">
+```javascript
+const controller = new AbortController();
+const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+try {
+  const response = await fetch('/api/v1/chat', {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify({ messages }),
+    signal: controller.signal
+  });
+  
+  clearTimeout(timeoutId);
+  // Process response...
+} catch (error) {
+  if (error.name === 'AbortError') {
+    console.log('Request timed out');
+  }
+}
+```
+</Accordion>
+
+<Accordion title="Connection Management">
+- Reuse HTTP connections when possible
+- Implement proper connection pooling
+- Handle network interruptions gracefully
+- Use appropriate timeouts for your use case
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Code Examples" icon="code" href="/examples/overview">
+    See complete implementation examples in multiple languages
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/errors">
+    Learn comprehensive error handling patterns
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/rate-limits">
+    Understand usage optimization and monitoring
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Manage API keys and security best practices
+  </Card>
+</CardGroup>

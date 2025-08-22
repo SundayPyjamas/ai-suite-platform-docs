@@ -1,0 +1,880 @@
+---
+title: "cURL Examples"
+description: "Complete cURL examples for testing and interacting with the SundayPyjamas AI Suite API"
+---
+
+## Overview
+
+This guide provides comprehensive cURL examples for testing and automating interactions with the SundayPyjamas AI Suite API. Perfect for command-line testing, shell scripting, and CI/CD pipelines.
+
+<Info>
+All examples include proper error handling, output formatting, and can be easily adapted for automation scripts.
+</Info>
+
+## Basic Setup
+
+### Environment Variables
+
+Set up your environment variables for easier testing:
+
+<Tabs>
+<Tab title="Linux/macOS">
+```bash
+export SUNDAYPYJAMAS_API_KEY="spj_ai_your_api_key_here"
+export SUNDAYPYJAMAS_API_URL="https://suite.sundaypyjamas.com/api/v1"
+```
+</Tab>
+
+<Tab title="Windows (Command Prompt)">
+```cmd
+set SUNDAYPYJAMAS_API_KEY=spj_ai_your_api_key_here
+set SUNDAYPYJAMAS_API_URL=https://suite.sundaypyjamas.com/api/v1
+```
+</Tab>
+
+<Tab title="Windows (PowerShell)">
+```powershell
+$env:SUNDAYPYJAMAS_API_KEY="spj_ai_your_api_key_here"
+$env:SUNDAYPYJAMAS_API_URL="https://suite.sundaypyjamas.com/api/v1"
+```
+</Tab>
+</Tabs>
+
+### Verify Setup
+
+Test your environment variables:
+
+```bash
+echo "API Key: $SUNDAYPYJAMAS_API_KEY"
+echo "API URL: $SUNDAYPYJAMAS_API_URL"
+```
+
+## Basic Chat Request
+
+### Simple Single Message
+
+```bash
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello! Can you help me write a professional email?"
+      }
+    ]
+  }'
+```
+
+### With Specific Model
+
+```bash
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Explain quantum computing in simple terms."
+      }
+    ],
+    "model": "llama-3.3-70b-versatile"
+  }'
+```
+
+### Multi-turn Conversation
+
+```bash
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is the capital of France?"
+      },
+      {
+        "role": "assistant",
+        "content": "The capital of France is Paris."
+      },
+      {
+        "role": "user",
+        "content": "What about its population?"
+      }
+    ]
+  }'
+```
+
+### With System Message
+
+```bash
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a professional copywriter specializing in marketing content. Write compelling, persuasive copy that drives action."
+      },
+      {
+        "role": "user",
+        "content": "Write a product description for wireless noise-canceling headphones."
+      }
+    ]
+  }'
+```
+
+## Content Generation Examples
+
+### Blog Post Generation
+
+```bash
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are an expert blog writer. Create engaging, well-structured blog posts with clear headers, practical insights, and strong conclusions."
+      },
+      {
+        "role": "user",
+        "content": "Write a 1000-word blog post about sustainable web development practices for web developers. Include practical tips and examples."
+      }
+    ]
+  }' | tee blog_post.txt
+```
+
+### Email Generation
+
+```bash
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a professional email writer. Write clear, effective emails with proper structure and tone."
+      },
+      {
+        "role": "user",
+        "content": "Write a follow-up email to a potential client after a product demo. Include next steps and a call to action."
+      }
+    ]
+  }' | tee follow_up_email.txt
+```
+
+### Marketing Copy
+
+```bash
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are an expert copywriter. Write compelling marketing copy that focuses on benefits, creates urgency, and drives conversions."
+      },
+      {
+        "role": "user",
+        "content": "Write landing page copy for an AI-powered project management tool targeting small business owners. Include headline, benefits, and call-to-action."
+      }
+    ]
+  }' | tee landing_page_copy.txt
+```
+
+## Streaming Response Handling
+
+### Basic Streaming
+
+```bash
+# Stream response and display in real-time
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Write a creative short story about AI and humans working together."
+      }
+    ]
+  }' --no-buffer
+```
+
+### Save Streaming Response
+
+```bash
+# Stream to file
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Create a comprehensive guide on API best practices."
+      }
+    ]
+  }' --no-buffer -o api_guide.txt
+```
+
+## Error Testing and Debugging
+
+### Test Invalid API Key
+
+```bash
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer invalid_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello"
+      }
+    ]
+  }' -w "\nHTTP Status: %{http_code}\n"
+```
+
+**Expected response:**
+```json
+{
+  "error": "Invalid API key"
+}
+HTTP Status: 401
+```
+
+### Test Missing Messages
+
+```bash
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  -w "\nHTTP Status: %{http_code}\n"
+```
+
+**Expected response:**
+```json
+{
+  "error": "Messages array is required"
+}
+HTTP Status: 400
+```
+
+### Test Invalid Message Format
+
+```bash
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user"
+      }
+    ]
+  }' -w "\nHTTP Status: %{http_code}\n"
+```
+
+### Debug Request with Verbose Output
+
+```bash
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Test message"
+      }
+    ]
+  }' \
+  -v \
+  -w "\n\nResponse Time: %{time_total}s\nHTTP Code: %{http_code}\n"
+```
+
+## Advanced Examples
+
+### Batch Processing with Shell Script
+
+Create a file called `batch_process.sh`:
+
+```bash
+#!/bin/bash
+
+# batch_process.sh - Process multiple prompts
+API_KEY="${SUNDAYPYJAMAS_API_KEY}"
+API_URL="${SUNDAYPYJAMAS_API_URL}"
+
+if [ -z "$API_KEY" ] || [ -z "$API_URL" ]; then
+    echo "Error: Please set SUNDAYPYJAMAS_API_KEY and SUNDAYPYJAMAS_API_URL environment variables"
+    exit 1
+fi
+
+# Array of prompts
+prompts=(
+    "Write a haiku about technology"
+    "Explain the concept of recursion in programming"
+    "Create a product description for a smart watch"
+    "Write a motivational quote about learning"
+)
+
+# Process each prompt
+for i in "${!prompts[@]}"; do
+    echo "Processing prompt $((i+1))/${#prompts[@]}: ${prompts[i]}"
+    
+    curl -X POST "${API_URL}/chat" \
+        -H "Authorization: Bearer ${API_KEY}" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"messages\": [
+                {
+                    \"role\": \"user\",
+                    \"content\": \"${prompts[i]}\"
+                }
+            ]
+        }" \
+        -o "output_$((i+1)).txt" \
+        -s
+    
+    echo "Saved to output_$((i+1)).txt"
+    echo "---"
+done
+
+echo "Batch processing complete!"
+```
+
+Make it executable and run:
+
+```bash
+chmod +x batch_process.sh
+./batch_process.sh
+```
+
+### Content Generation Pipeline
+
+Create `content_pipeline.sh`:
+
+```bash
+#!/bin/bash
+
+# Content generation pipeline
+API_KEY="${SUNDAYPYJAMAS_API_KEY}"
+API_URL="${SUNDAYPYJAMAS_API_URL}"
+
+generate_content() {
+    local content_type="$1"
+    local prompt="$2"
+    local filename="$3"
+    
+    echo "Generating ${content_type}..."
+    
+    curl -X POST "${API_URL}/chat" \
+        -H "Authorization: Bearer ${API_KEY}" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"messages\": [
+                {
+                    \"role\": \"system\",
+                    \"content\": \"You are a professional ${content_type} writer. Create high-quality, engaging content.\"
+                },
+                {
+                    \"role\": \"user\",
+                    \"content\": \"${prompt}\"
+                }
+            ]
+        }" \
+        -o "${filename}" \
+        -s
+    
+    echo "✓ ${content_type} saved to ${filename}"
+}
+
+# Generate different types of content
+generate_content "blog post" \
+    "Write a 800-word blog post about the benefits of remote work for software teams" \
+    "blog_post.txt"
+
+generate_content "email" \
+    "Write a professional email announcing a new product launch to customers" \
+    "announcement_email.txt"
+
+generate_content "social media" \
+    "Create an engaging LinkedIn post about work-life balance tips for professionals" \
+    "linkedin_post.txt"
+
+generate_content "marketing copy" \
+    "Write compelling homepage copy for a productivity app targeting busy professionals" \
+    "homepage_copy.txt"
+
+echo "Content generation pipeline complete!"
+echo "Generated files:"
+ls -la *.txt
+```
+
+### Response Analysis Script
+
+Create `analyze_response.sh`:
+
+```bash
+#!/bin/bash
+
+# Analyze API response
+API_KEY="${SUNDAYPYJAMAS_API_KEY}"
+API_URL="${SUNDAYPYJAMAS_API_URL}"
+
+prompt="$1"
+if [ -z "$prompt" ]; then
+    echo "Usage: $0 \"Your prompt here\""
+    exit 1
+fi
+
+echo "Analyzing response for prompt: $prompt"
+echo "=================================="
+
+# Make request and capture timing
+start_time=$(date +%s.%N)
+
+response=$(curl -X POST "${API_URL}/chat" \
+    -H "Authorization: Bearer ${API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{
+        \"messages\": [
+            {
+                \"role\": \"user\",
+                \"content\": \"${prompt}\"
+            }
+        ]
+    }" \
+    -s -w "%{http_code}|%{time_total}|%{size_download}")
+
+end_time=$(date +%s.%N)
+
+# Parse response
+http_code=$(echo "$response" | tail -c 20 | cut -d'|' -f1)
+time_total=$(echo "$response" | tail -c 20 | cut -d'|' -f2)
+size_download=$(echo "$response" | tail -c 20 | cut -d'|' -f3)
+content=$(echo "$response" | head -c -20)
+
+# Calculate metrics
+duration=$(echo "$end_time - $start_time" | bc)
+word_count=$(echo "$content" | wc -w)
+char_count=$(echo "$content" | wc -c)
+
+echo "HTTP Status: $http_code"
+echo "Response Time: ${time_total}s"
+echo "Total Duration: ${duration}s"
+echo "Response Size: $size_download bytes"
+echo "Word Count: $word_count"
+echo "Character Count: $char_count"
+echo ""
+echo "Response Content:"
+echo "=================="
+echo "$content"
+
+# Save detailed analysis
+cat > analysis_$(date +%Y%m%d_%H%M%S).json << EOF
+{
+  "prompt": "$prompt",
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "metrics": {
+    "http_status": $http_code,
+    "response_time": $time_total,
+    "total_duration": $duration,
+    "response_size": $size_download,
+    "word_count": $word_count,
+    "character_count": $char_count
+  },
+  "response": $(echo "$content" | jq -Rs .)
+}
+EOF
+
+echo ""
+echo "Analysis saved to analysis_$(date +%Y%m%d_%H%M%S).json"
+```
+
+Usage:
+```bash
+chmod +x analyze_response.sh
+./analyze_response.sh "Explain machine learning in simple terms"
+```
+
+## Testing and Debugging
+
+### Check API Connectivity
+
+```bash
+# Test basic connectivity
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello"
+      }
+    ]
+  }' \
+  -v \
+  -w "\n\nResponse Time: %{time_total}s\nHTTP Code: %{http_code}\n"
+```
+
+### Debug Headers and Request
+
+```bash
+# Show detailed request/response information
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Test message"
+      }
+    ]
+  }' \
+  --trace-ascii trace.log \
+  -v
+```
+
+### Performance Testing
+
+```bash
+# Time multiple requests
+for i in {1..5}; do
+  echo "Request $i:"
+  time curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+    -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is 2+2?"
+        }
+      ]
+    }' \
+    -s -o /dev/null \
+    -w "Response time: %{time_total}s\n"
+  echo "---"
+done
+```
+
+### Load Testing Script
+
+```bash
+#!/bin/bash
+
+# load_test.sh - Simple load testing
+API_KEY="${SUNDAYPYJAMAS_API_KEY}"
+API_URL="${SUNDAYPYJAMAS_API_URL}"
+
+CONCURRENT_REQUESTS=5
+TOTAL_REQUESTS=50
+REQUEST_DELAY=0.1
+
+echo "Starting load test:"
+echo "- Concurrent requests: $CONCURRENT_REQUESTS"
+echo "- Total requests: $TOTAL_REQUESTS"
+echo "- Delay between requests: ${REQUEST_DELAY}s"
+echo "=================================="
+
+make_request() {
+    local request_id=$1
+    local start_time=$(date +%s.%N)
+    
+    response=$(curl -X POST "${API_URL}/chat" \
+        -H "Authorization: Bearer ${API_KEY}" \
+        -H "Content-Type: application/json" \
+        -d '{
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Hello from request '$request_id'"
+                }
+            ]
+        }' \
+        -s -w "%{http_code}|%{time_total}")
+    
+    local end_time=$(date +%s.%N)
+    local http_code=$(echo "$response" | tail -c 10 | cut -d'|' -f1)
+    local time_total=$(echo "$response" | tail -c 10 | cut -d'|' -f2)
+    local duration=$(echo "$end_time - $start_time" | bc)
+    
+    echo "Request $request_id: HTTP $http_code, Time: ${time_total}s"
+}
+
+# Run load test
+for ((i=1; i<=TOTAL_REQUESTS; i++)); do
+    make_request $i &
+    
+    # Limit concurrent requests
+    if (( i % CONCURRENT_REQUESTS == 0 )); then
+        wait
+        sleep $REQUEST_DELAY
+    fi
+done
+
+wait
+echo "Load test complete!"
+```
+
+## JSON Processing with jq
+
+### Extract Specific Data
+
+```bash
+# Process response with jq
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Generate a JSON object with user data"
+      }
+    ]
+  }' -s | jq -r '.'
+```
+
+### Format Error Responses
+
+```bash
+# Handle errors gracefully
+handle_api_response() {
+    local response="$1"
+    local http_code="$2"
+    
+    if [ "$http_code" = "200" ]; then
+        echo "✅ Success:"
+        echo "$response"
+    else
+        echo "❌ Error (HTTP $http_code):"
+        echo "$response" | jq -r '.error // "Unknown error"'
+    fi
+}
+
+# Usage
+response=$(curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+    -H "Authorization: Bearer invalid_key" \
+    -H "Content-Type: application/json" \
+    -d '{"messages": [{"role": "user", "content": "test"}]}' \
+    -s -w "%{http_code}")
+
+http_code=$(echo "$response" | tail -c 4)
+content=$(echo "$response" | head -c -4)
+
+handle_api_response "$content" "$http_code"
+```
+
+## Best Practices
+
+### 1. Always Handle Errors
+
+```bash
+# Check for errors in responses
+response=$(curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Hello"}]}' \
+  -s -w "%{http_code}")
+
+http_code=$(echo "$response" | tail -c 4)
+content=$(echo "$response" | head -c -4)
+
+if [ "$http_code" -ne 200 ]; then
+    echo "Error: HTTP $http_code"
+    echo "$content"
+    exit 1
+fi
+
+echo "$content"
+```
+
+### 2. Use Proper JSON Escaping
+
+```bash
+# For prompts with quotes or special characters
+prompt="Say \"Hello, World!\" and explain what programming is."
+
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg content "$prompt" '{
+    messages: [
+      {
+        role: "user",
+        content: $content
+      }
+    ]
+  }')"
+```
+
+### 3. Set Timeouts
+
+```bash
+# Set connection and max time limits
+curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+  -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Hello"}]}' \
+  --connect-timeout 30 \
+  --max-time 300
+```
+
+### 4. Create Reusable Functions
+
+```bash
+# api_helpers.sh - Reusable API functions
+
+send_chat_request() {
+    local messages="$1"
+    local model="${2:-llama-3.3-70b-versatile}"
+    
+    curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+        -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"messages\": $messages,
+            \"model\": \"$model\"
+        }" \
+        -s
+}
+
+send_simple_message() {
+    local content="$1"
+    local role="${2:-user}"
+    
+    local messages=$(jq -n --arg role "$role" --arg content "$content" '[{
+        role: $role,
+        content: $content
+    }]')
+    
+    send_chat_request "$messages"
+}
+
+# Usage
+source api_helpers.sh
+response=$(send_simple_message "Write a haiku about coding")
+echo "$response"
+```
+
+## CI/CD Integration
+
+### GitHub Actions Example
+
+```yaml
+# .github/workflows/api-test.yml
+name: API Integration Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-api:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Test API Connection
+      env:
+        SUNDAYPYJAMAS_API_KEY: ${{ secrets.SUNDAYPYJAMAS_API_KEY }}
+        SUNDAYPYJAMAS_API_URL: ${{ secrets.SUNDAYPYJAMAS_API_URL }}
+      run: |
+        response=$(curl -X POST "${SUNDAYPYJAMAS_API_URL}/chat" \
+          -H "Authorization: Bearer ${SUNDAYPYJAMAS_API_KEY}" \
+          -H "Content-Type: application/json" \
+          -d '{"messages": [{"role": "user", "content": "API test"}]}' \
+          -s -w "%{http_code}")
+        
+        http_code=$(echo "$response" | tail -c 4)
+        content=$(echo "$response" | head -c -4)
+        
+        if [ "$http_code" -eq 200 ]; then
+          echo "✅ API test passed"
+          echo "Response: $content"
+        else
+          echo "❌ API test failed: HTTP $http_code"
+          echo "$content"
+          exit 1
+        fi
+```
+
+### Docker Integration
+
+```dockerfile
+# Dockerfile for API testing
+FROM curlimages/curl:latest
+
+WORKDIR /app
+COPY test_scripts/ .
+
+RUN chmod +x *.sh
+
+CMD ["./run_api_tests.sh"]
+```
+
+```bash
+# run_api_tests.sh
+#!/bin/sh
+
+echo "Running SundayPyjamas API tests..."
+
+# Test basic connectivity
+echo "Testing API connectivity..."
+if ./test_connectivity.sh; then
+    echo "✅ Connectivity test passed"
+else
+    echo "❌ Connectivity test failed"
+    exit 1
+fi
+
+# Test content generation
+echo "Testing content generation..."
+if ./test_content_generation.sh; then
+    echo "✅ Content generation test passed"
+else
+    echo "❌ Content generation test failed"
+    exit 1
+fi
+
+echo "All tests passed! 🎉"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="JavaScript Examples" icon="js" href="/examples/javascript">
+    Learn JavaScript/TypeScript implementations with React components
+  </Card>
+  <Card title="Python Examples" icon="python" href="/examples/python">
+    Explore comprehensive Python implementations with async support
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/rate-limits">
+    Understand usage guidelines and optimization strategies
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Review API key management and security best practices
+  </Card>
+</CardGroup>
+
+<Tip>
+All cURL examples can be easily adapted for automation, testing, and integration into CI/CD pipelines. The shell scripts provide a foundation for building more complex workflows.
+</Tip>

@@ -1,0 +1,1163 @@
+---
+title: "Python Examples"
+description: "Complete examples for integrating the SundayPyjamas AI Suite API with Python applications"
+---
+
+## Overview
+
+This guide provides comprehensive Python examples for integrating with the SundayPyjamas AI Suite API, including synchronous and asynchronous implementations, batch processing, and CLI tools.
+
+<Info>
+Examples include both sync and async implementations with comprehensive error handling and production-ready patterns.
+</Info>
+
+## Installation
+
+Install required packages:
+
+```bash
+pip install requests
+pip install python-dotenv  # For environment variables
+pip install asyncio         # For async examples (Python 3.7+)
+pip install aiohttp         # For async HTTP requests
+pip install click           # For CLI examples
+pip install rich            # For beautiful CLI output
+```
+
+## Basic Setup
+
+### Environment Variables
+
+Create a `.env` file:
+
+```bash
+# .env
+SUNDAYPYJAMAS_API_KEY=spj_ai_your_api_key_here
+SUNDAYPYJAMAS_API_URL=https://suite.sundaypyjamas.com/api/v1
+```
+
+### Configuration
+
+```python
+# config.py
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+API_KEY = os.getenv('SUNDAYPYJAMAS_API_KEY')
+API_URL = os.getenv('SUNDAYPYJAMAS_API_URL', 'https://suite.sundaypyjamas.com/api/v1')
+
+if not API_KEY:
+    raise ValueError("SUNDAYPYJAMAS_API_KEY environment variable is required")
+```
+
+## Simple Chat Request
+
+### Synchronous Implementation
+
+```python
+import requests
+from typing import List, Dict, Optional
+from config import API_KEY, API_URL
+
+class SundayPyjamasClient:
+    def __init__(self, api_key: str, api_url: str):
+        self.api_key = api_key
+        self.api_url = api_url
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        })
+
+    def chat(self, messages: List[Dict[str, str]], model: str = 'llama-3.3-70b-versatile') -> str:
+        """
+        Send a chat request and return the complete response.
+        
+        Args:
+            messages: List of message dictionaries with 'role' and 'content' keys
+            model: AI model to use
+            
+        Returns:
+            Complete AI response as string
+        """
+        response = self.session.post(
+            f'{self.api_url}/chat',
+            json={
+                'messages': messages,
+                'model': model
+            },
+            stream=True
+        )
+        
+        response.raise_for_status()
+        
+        # Read streaming response
+        full_response = ''
+        for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+            if chunk:
+                full_response += chunk
+                
+        return full_response
+
+# Usage
+client = SundayPyjamasClient(API_KEY, API_URL)
+
+messages = [
+    {'role': 'user', 'content': 'Write a professional email about a project update.'}
+]
+
+try:
+    response = client.chat(messages)
+    print("AI Response:")
+    print(response)
+except requests.exceptions.RequestException as e:
+    print(f"Error: {e}")
+```
+
+### Streaming Response Handler
+
+```python
+import requests
+from typing import List, Dict, Callable, Optional
+
+def stream_chat_response(
+    client: SundayPyjamasClient,
+    messages: List[Dict[str, str]],
+    on_chunk: Callable[[str], None],
+    on_complete: Callable[[str], None],
+    on_error: Callable[[Exception], None],
+    model: str = 'llama-3.3-70b-versatile'
+) -> None:
+    """
+    Stream chat response with callbacks for real-time processing.
+    
+    Args:
+        client: SundayPyjamasClient instance
+        messages: List of message dictionaries
+        on_chunk: Callback for each response chunk
+        on_complete: Callback when response is complete
+        on_error: Callback for error handling
+        model: AI model to use
+    """
+    try:
+        response = client.session.post(
+            f'{client.api_url}/chat',
+            json={
+                'messages': messages,
+                'model': model
+            },
+            stream=True
+        )
+        
+        response.raise_for_status()
+        
+        full_response = ''
+        for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+            if chunk:
+                full_response += chunk
+                on_chunk(chunk)
+                
+        on_complete(full_response)
+        
+    except Exception as e:
+        on_error(e)
+
+# Usage with streaming
+def print_chunk(chunk: str):
+    print(chunk, end='', flush=True)
+
+def print_complete(full_response: str):
+    print(f"\n\nComplete! Total length: {len(full_response)} characters")
+
+def handle_error(error: Exception):
+    print(f"\nError occurred: {error}")
+
+messages = [
+    {'role': 'user', 'content': 'Explain quantum computing in simple terms.'}
+]
+
+stream_chat_response(
+    client,
+    messages,
+    on_chunk=print_chunk,
+    on_complete=print_complete,
+    on_error=handle_error
+)
+```
+
+## Async Implementation
+
+### Async Client with aiohttp
+
+```python
+import asyncio
+import aiohttp
+from typing import List, Dict, Optional, Callable
+from config import API_KEY, API_URL
+
+class AsyncSundayPyjamasClient:
+    def __init__(self, api_key: str, api_url: str):
+        self.api_key = api_key
+        self.api_url = api_url
+        self.headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+
+    async def chat(self, messages: List[Dict[str, str]], model: str = 'llama-3.3-70b-versatile') -> str:
+        """
+        Send async chat request and return complete response.
+        """
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f'{self.api_url}/chat',
+                json={
+                    'messages': messages,
+                    'model': model
+                },
+                headers=self.headers
+            ) as response:
+                response.raise_for_status()
+                
+                full_response = ''
+                async for chunk in response.content.iter_chunked(1024):
+                    chunk_text = chunk.decode('utf-8')
+                    full_response += chunk_text
+                    
+                return full_response
+
+    async def stream_chat(
+        self,
+        messages: List[Dict[str, str]],
+        on_chunk: Callable[[str], None],
+        model: str = 'llama-3.3-70b-versatile'
+    ) -> str:
+        """
+        Stream chat response with real-time chunk processing.
+        """
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f'{self.api_url}/chat',
+                json={
+                    'messages': messages,
+                    'model': model
+                },
+                headers=self.headers
+            ) as response:
+                response.raise_for_status()
+                
+                full_response = ''
+                async for chunk in response.content.iter_chunked(1024):
+                    chunk_text = chunk.decode('utf-8')
+                    full_response += chunk_text
+                    on_chunk(chunk_text)
+                    
+                return full_response
+
+# Usage
+async def main():
+    client = AsyncSundayPyjamasClient(API_KEY, API_URL)
+    
+    messages = [
+        {'role': 'user', 'content': 'Write a Python function to calculate fibonacci numbers.'}
+    ]
+    
+    # Simple async request
+    try:
+        response = await client.chat(messages)
+        print("AI Response:")
+        print(response)
+    except Exception as e:
+        print(f"Error: {e}")
+    
+    # Streaming async request
+    print("\n--- Streaming Response ---")
+    try:
+        await client.stream_chat(
+            messages,
+            lambda chunk: print(chunk, end='', flush=True)
+        )
+        print("\n--- Streaming Complete ---")
+    except Exception as e:
+        print(f"Streaming error: {e}")
+
+# Run async example
+asyncio.run(main())
+```
+
+## Batch Processing
+
+### Process Multiple Requests
+
+```python
+import asyncio
+import time
+from typing import List, Dict, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+class BatchProcessor:
+    def __init__(self, client: SundayPyjamasClient, max_workers: int = 5):
+        self.client = client
+        self.max_workers = max_workers
+
+    def process_batch_sync(self, requests: List[Dict]) -> List[Tuple[int, str, Optional[str]]]:
+        """
+        Process multiple requests synchronously with threading.
+        
+        Returns:
+            List of tuples (index, result, error)
+        """
+        results = []
+        
+        def process_single(index_and_request):
+            index, request = index_and_request
+            try:
+                response = self.client.chat(
+                    request['messages'],
+                    request.get('model', 'llama-3.3-70b-versatile')
+                )
+                return (index, response, None)
+            except Exception as e:
+                return (index, None, str(e))
+        
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {
+                executor.submit(process_single, (i, req)): i 
+                for i, req in enumerate(requests)
+            }
+            
+            for future in as_completed(futures):
+                results.append(future.result())
+        
+        # Sort by original index
+        return sorted(results, key=lambda x: x[0])
+
+    async def process_batch_async(self, requests: List[Dict]) -> List[Tuple[int, str, Optional[str]]]:
+        """
+        Process multiple requests asynchronously.
+        """
+        async_client = AsyncSundayPyjamasClient(self.client.api_key, self.client.api_url)
+        
+        async def process_single(index: int, request: Dict):
+            try:
+                response = await async_client.chat(
+                    request['messages'],
+                    request.get('model', 'llama-3.3-70b-versatile')
+                )
+                return (index, response, None)
+            except Exception as e:
+                return (index, None, str(e))
+        
+        # Create semaphore to limit concurrent requests
+        semaphore = asyncio.Semaphore(self.max_workers)
+        
+        async def limited_process(index: int, request: Dict):
+            async with semaphore:
+                return await process_single(index, request)
+        
+        tasks = [
+            limited_process(i, req) 
+            for i, req in enumerate(requests)
+        ]
+        
+        results = await asyncio.gather(*tasks)
+        return sorted(results, key=lambda x: x[0])
+
+# Usage
+client = SundayPyjamasClient(API_KEY, API_URL)
+processor = BatchProcessor(client, max_workers=3)
+
+# Prepare batch requests
+batch_requests = [
+    {
+        'messages': [{'role': 'user', 'content': 'Write a haiku about technology.'}]
+    },
+    {
+        'messages': [{'role': 'user', 'content': 'Explain the concept of recursion.'}]
+    },
+    {
+        'messages': [{'role': 'user', 'content': 'Write a product description for a smartphone.'}]
+    },
+    {
+        'messages': [{'role': 'user', 'content': 'Create a motivational quote about learning.'}]
+    }
+]
+
+# Process synchronously
+print("Processing batch synchronously...")
+start_time = time.time()
+sync_results = processor.process_batch_sync(batch_requests)
+sync_duration = time.time() - start_time
+
+print(f"Sync processing took {sync_duration:.2f} seconds")
+for index, result, error in sync_results:
+    if error:
+        print(f"Request {index} failed: {error}")
+    else:
+        print(f"Request {index} result: {result[:100]}...")
+
+# Process asynchronously
+async def run_async_batch():
+    print("\nProcessing batch asynchronously...")
+    start_time = time.time()
+    async_results = await processor.process_batch_async(batch_requests)
+    async_duration = time.time() - start_time
+    
+    print(f"Async processing took {async_duration:.2f} seconds")
+    for index, result, error in async_results:
+        if error:
+            print(f"Request {index} failed: {error}")
+        else:
+            print(f"Request {index} result: {result[:100]}...")
+
+asyncio.run(run_async_batch())
+```
+
+## Content Generation Tools
+
+### Advanced Content Generator
+
+```python
+import json
+from enum import Enum
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Union
+
+class ContentTone(Enum):
+    PROFESSIONAL = "professional"
+    CASUAL = "casual"
+    ACADEMIC = "academic"
+    CREATIVE = "creative"
+    PERSUASIVE = "persuasive"
+
+class ContentLength(Enum):
+    SHORT = "short"
+    MEDIUM = "medium"
+    LONG = "long"
+    EXTRA_LONG = "extra_long"
+
+@dataclass
+class ContentRequest:
+    content_type: str
+    topic: str
+    tone: ContentTone
+    length: ContentLength
+    audience: str
+    additional_requirements: Optional[str] = None
+
+class ContentGenerator:
+    def __init__(self, client: SundayPyjamasClient):
+        self.client = client
+        
+        # Length guides for different content types
+        self.length_guides = {
+            'blog_post': {
+                ContentLength.SHORT: '500-800 words',
+                ContentLength.MEDIUM: '1000-1500 words',
+                ContentLength.LONG: '2000-3000 words',
+                ContentLength.EXTRA_LONG: '3000-5000 words'
+            },
+            'email': {
+                ContentLength.SHORT: '100-200 words',
+                ContentLength.MEDIUM: '200-400 words',
+                ContentLength.LONG: '400-600 words',
+                ContentLength.EXTRA_LONG: '600+ words'
+            },
+            'social_media': {
+                ContentLength.SHORT: '50-100 words',
+                ContentLength.MEDIUM: '100-200 words',
+                ContentLength.LONG: '200-300 words',
+                ContentLength.EXTRA_LONG: '300+ words'
+            }
+        }
+
+    def generate_blog_post(self, request: ContentRequest) -> str:
+        """Generate a blog post based on the request parameters."""
+        system_prompt = f"""You are an expert content writer specializing in blog posts. 
+Write engaging, well-structured blog posts that:
+- Have compelling introductions that hook the reader
+- Use clear section headers for easy scanning
+- Include practical insights and actionable advice
+- Have strong conclusions that reinforce key points
+- Are optimized for the target audience: {request.audience}
+- Match the {request.tone.value} tone throughout"""
+
+        length_guide = self.length_guides['blog_post'][request.length]
+        
+        user_prompt = f"""Write a {request.tone.value} blog post about "{request.topic}" for {request.audience}.
+
+Target length: {length_guide}
+
+Structure requirements:
+- Compelling headline/title
+- Engaging introduction
+- 3-5 main sections with headers
+- Practical examples or insights
+- Strong conclusion with call-to-action
+
+{f"Additional requirements: {request.additional_requirements}" if request.additional_requirements else ""}"""
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        return self.client.chat(messages)
+
+    def generate_email(self, purpose: str, recipient: str, tone: ContentTone, length: ContentLength) -> str:
+        """Generate an email for a specific purpose."""
+        system_prompt = f"""You are a professional email writer. Write clear, effective emails that:
+- Achieve their intended purpose
+- Use appropriate tone and formality level
+- Are concise yet complete
+- Include proper email structure (subject, greeting, body, closing)
+- Are tailored to the recipient"""
+
+        length_guide = self.length_guides['email'][length]
+        
+        user_prompt = f"""Write a {tone.value} email to {recipient} about {purpose}.
+
+Target length: {length_guide}
+
+Include:
+- Clear, compelling subject line
+- Appropriate greeting
+- Well-structured body that addresses the purpose
+- Professional closing
+- Any necessary call-to-action"""
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        return self.client.chat(messages)
+
+    def generate_marketing_copy(self, product: str, audience: str, format_type: str, tone: ContentTone) -> str:
+        """Generate marketing copy for a product."""
+        system_prompt = f"""You are an expert copywriter specializing in conversion-focused marketing content. 
+Write compelling copy that:
+- Focuses on benefits over features
+- Creates emotional connection with the audience
+- Uses persuasive language appropriate to the format
+- Includes strong calls-to-action
+- Addresses pain points and desires of the target audience"""
+
+        user_prompt = f"""Write {format_type} marketing copy for "{product}" targeting {audience}.
+
+Tone: {tone.value}
+
+Requirements:
+- Lead with a strong hook that grabs attention
+- Highlight key benefits that matter to {audience}
+- Address common objections or concerns
+- Create urgency or desire to act
+- End with a clear, compelling call-to-action
+
+Focus on what matters most to {audience} and how {product} solves their problems or improves their situation."""
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        return self.client.chat(messages)
+
+    def generate_social_media_content(self, platform: str, topic: str, tone: ContentTone, length: ContentLength) -> str:
+        """Generate social media content for specific platforms."""
+        platform_guides = {
+            'twitter': 'Keep under 280 characters, use hashtags, be concise and engaging',
+            'linkedin': 'Professional tone, longer form content allowed, focus on insights',
+            'instagram': 'Visual-first mindset, engaging captions, use relevant hashtags',
+            'facebook': 'Community-focused, encourage engagement, mix of formal and casual'
+        }
+
+        system_prompt = f"""You are a social media content creator expert in {platform} content.
+Create engaging posts that:
+- Follow {platform} best practices: {platform_guides.get(platform, 'General social media guidelines')}
+- Match the platform's typical content style and audience expectations
+- Encourage engagement through questions, calls-to-action, or discussion starters
+- Use appropriate hashtags and formatting for the platform"""
+
+        length_guide = self.length_guides['social_media'][length]
+        
+        user_prompt = f"""Create a {tone.value} {platform} post about {topic}.
+
+Target length: {length_guide}
+
+Requirements:
+- Platform: {platform}
+- Engaging opening that stops the scroll
+- Clear, valuable content about {topic}
+- Encourage interaction (comments, shares, likes)
+- Include relevant hashtags
+- End with engaging question or call-to-action"""
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        return self.client.chat(messages)
+
+# Usage examples
+client = SundayPyjamasClient(API_KEY, API_URL)
+generator = ContentGenerator(client)
+
+# Generate a blog post
+blog_request = ContentRequest(
+    content_type="blog_post",
+    topic="The Future of Remote Work Technology",
+    tone=ContentTone.PROFESSIONAL,
+    length=ContentLength.MEDIUM,
+    audience="business leaders and HR professionals",
+    additional_requirements="Include statistics and practical implementation tips"
+)
+
+print("Generating blog post...")
+blog_post = generator.generate_blog_post(blog_request)
+print("Blog Post Generated:")
+print(blog_post[:500] + "..." if len(blog_post) > 500 else blog_post)
+
+# Generate an email
+print("\nGenerating email...")
+email = generator.generate_email(
+    purpose="following up on our product demo and discussing next steps",
+    recipient="potential enterprise client",
+    tone=ContentTone.PROFESSIONAL,
+    length=ContentLength.MEDIUM
+)
+print("Email Generated:")
+print(email[:300] + "..." if len(email) > 300 else email)
+```
+
+## Error Handling and Retry Logic
+
+### Robust Error Handling
+
+```python
+import time
+import random
+from typing import Dict, List, Optional, Type
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+class APIError(Exception):
+    """Custom exception for API errors."""
+    def __init__(self, message: str, status_code: int, error_code: Optional[str] = None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.error_code = error_code
+
+class RobustSundayPyjamasClient:
+    def __init__(self, api_key: str, api_url: str, max_retries: int = 3, timeout: int = 30):
+        self.api_key = api_key
+        self.api_url = api_url
+        self.max_retries = max_retries
+        self.timeout = timeout
+        
+        # Create session with retry strategy
+        self.session = requests.Session()
+        
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=max_retries,
+            status_forcelist=[429, 500, 502, 503, 504],
+            backoff_factor=1,
+            allowed_methods=["POST"]
+        )
+        
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        
+        # Set headers
+        self.session.headers.update({
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        })
+
+    def _handle_response_error(self, response: requests.Response) -> None:
+        """Handle API response errors."""
+        try:
+            error_data = response.json()
+            error_message = error_data.get('error', 'Unknown error')
+        except (ValueError, KeyError):
+            error_message = f"HTTP {response.status_code} error"
+
+        error_mappings = {
+            400: "Bad request - check your input parameters",
+            401: "Invalid API key - check your authentication",
+            403: "Forbidden - token limit exceeded or insufficient permissions",
+            404: "Endpoint not found",
+            429: "Rate limit exceeded - please wait before retrying",
+            500: "Internal server error - please try again later",
+            502: "Bad gateway - service temporarily unavailable",
+            503: "Service unavailable - please try again later",
+            504: "Gateway timeout - request took too long"
+        }
+
+        detailed_message = error_mappings.get(response.status_code, error_message)
+        
+        raise APIError(detailed_message, response.status_code)
+
+    def _exponential_backoff(self, attempt: int, base_delay: float = 1.0, max_delay: float = 60.0) -> None:
+        """Implement exponential backoff with jitter."""
+        delay = min(base_delay * (2 ** attempt) + random.uniform(0, 1), max_delay)
+        time.sleep(delay)
+
+    def chat_with_retry(
+        self, 
+        messages: List[Dict[str, str]], 
+        model: str = 'llama-3.3-70b-versatile',
+        custom_retry_attempts: Optional[int] = None
+    ) -> str:
+        """
+        Send chat request with custom retry logic for specific errors.
+        """
+        retry_attempts = custom_retry_attempts or self.max_retries
+        last_exception = None
+
+        for attempt in range(retry_attempts + 1):
+            try:
+                response = self.session.post(
+                    f'{self.api_url}/chat',
+                    json={
+                        'messages': messages,
+                        'model': model
+                    },
+                    timeout=self.timeout,
+                    stream=True
+                )
+                
+                # Check for HTTP errors
+                if not response.ok:
+                    self._handle_response_error(response)
+                
+                # Read streaming response
+                full_response = ''
+                for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+                    if chunk:
+                        full_response += chunk
+                        
+                return full_response
+
+            except APIError as e:
+                last_exception = e
+                
+                # Don't retry on authentication or client errors
+                if e.status_code in [400, 401, 403, 404]:
+                    raise e
+                
+                # Don't retry on the last attempt
+                if attempt == retry_attempts:
+                    raise e
+                
+                print(f"API error (attempt {attempt + 1}/{retry_attempts + 1}): {e}")
+                self._exponential_backoff(attempt)
+
+            except requests.exceptions.RequestException as e:
+                last_exception = e
+                
+                # Don't retry on the last attempt
+                if attempt == retry_attempts:
+                    raise APIError(f"Request failed: {str(e)}", 0)
+                
+                print(f"Request error (attempt {attempt + 1}/{retry_attempts + 1}): {e}")
+                self._exponential_backoff(attempt)
+
+        # This should never be reached, but just in case
+        raise last_exception or APIError("Max retries exceeded", 0)
+
+# Usage with error handling
+client = RobustSundayPyjamasClient(API_KEY, API_URL, max_retries=3)
+
+messages = [
+    {'role': 'user', 'content': 'Explain machine learning in simple terms.'}
+]
+
+try:
+    # Basic chat with retry
+    response = client.chat_with_retry(messages)
+    print("Response received:")
+    print(response[:200] + "..." if len(response) > 200 else response)
+    
+except APIError as e:
+    print(f"API Error ({e.status_code}): {e}")
+    
+    # Handle specific errors
+    if e.status_code == 401:
+        print("Please check your API key configuration")
+    elif e.status_code == 403:
+        print("Check your token usage or account permissions")
+    elif e.status_code == 429:
+        print("Rate limit exceeded. Please wait before making more requests")
+    else:
+        print("An unexpected error occurred. Please try again later")
+
+except Exception as e:
+    print(f"Unexpected error: {e}")
+```
+
+## CLI Tool Example
+
+### Command-Line Interface
+
+```python
+#!/usr/bin/env python3
+
+import argparse
+import sys
+import json
+from typing import Dict, List
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.prompt import Prompt
+from rich.markdown import Markdown
+from config import API_KEY, API_URL
+
+console = Console()
+
+def create_cli_client():
+    """Create and return a CLI-optimized client."""
+    return RobustSundayPyjamasClient(API_KEY, API_URL)
+
+def interactive_chat():
+    """Run interactive chat mode."""
+    client = create_cli_client()
+    conversation = []
+    
+    console.print("[bold blue]SundayPyjamas AI Chat - Interactive Mode[/bold blue]")
+    console.print("Type 'quit' to exit, 'clear' to clear conversation history")
+    console.print("-" * 50)
+    
+    while True:
+        try:
+            user_input = Prompt.ask("\n[bold green]You[/bold green]").strip()
+            
+            if user_input.lower() == 'quit':
+                break
+            elif user_input.lower() == 'clear':
+                conversation = []
+                console.print("[yellow]Conversation history cleared.[/yellow]")
+                continue
+            elif not user_input:
+                continue
+            
+            # Add user message to conversation
+            conversation.append({'role': 'user', 'content': user_input})
+            
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+                transient=True
+            ) as progress:
+                task = progress.add_task("AI is thinking...", total=None)
+                
+                try:
+                    response = client.chat_with_retry(conversation)
+                    progress.stop()
+                    
+                    console.print(f"\n[bold blue]AI:[/bold blue]")
+                    console.print(Markdown(response))
+                    
+                    # Add AI response to conversation
+                    conversation.append({'role': 'assistant', 'content': response})
+                    
+                except APIError as e:
+                    progress.stop()
+                    console.print(f"\n[red]Error: {e}[/red]")
+                    # Remove the user message if AI response failed
+                    conversation.pop()
+                    
+        except KeyboardInterrupt:
+            console.print("\n\n[yellow]Goodbye![/yellow]")
+            break
+        except EOFError:
+            break
+
+def single_prompt(prompt: str, model: str):
+    """Process a single prompt and return response."""
+    client = create_cli_client()
+    
+    messages = [{'role': 'user', 'content': prompt}]
+    
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=True
+        ) as progress:
+            task = progress.add_task("Processing...", total=None)
+            response = client.chat_with_retry(messages, model)
+            progress.stop()
+        
+        return response
+    except APIError as e:
+        console.print(f"[red]Error: {e}[/red]", file=sys.stderr)
+        sys.exit(1)
+
+def batch_from_file(file_path: str, model: str):
+    """Process prompts from a JSON file."""
+    client = create_cli_client()
+    
+    try:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        
+        if isinstance(data, list):
+            prompts = data
+        elif isinstance(data, dict) and 'prompts' in data:
+            prompts = data['prompts']
+        else:
+            console.print("[red]Invalid file format. Expected array of strings or object with 'prompts' array.[/red]", file=sys.stderr)
+            sys.exit(1)
+        
+        results = []
+        
+        with Progress(console=console) as progress:
+            task = progress.add_task("[cyan]Processing prompts...", total=len(prompts))
+            
+            for i, prompt in enumerate(prompts):
+                progress.update(task, description=f"[cyan]Processing prompt {i+1}/{len(prompts)}...")
+                
+                try:
+                    messages = [{'role': 'user', 'content': prompt}]
+                    response = client.chat_with_retry(messages, model)
+                    results.append({
+                        'prompt': prompt,
+                        'response': response,
+                        'success': True
+                    })
+                except APIError as e:
+                    results.append({
+                        'prompt': prompt,
+                        'error': str(e),
+                        'success': False
+                    })
+                
+                progress.update(task, advance=1)
+        
+        return results
+        
+    except FileNotFoundError:
+        console.print(f"[red]File not found: {file_path}[/red]", file=sys.stderr)
+        sys.exit(1)
+    except json.JSONDecodeError:
+        console.print(f"[red]Invalid JSON in file: {file_path}[/red]", file=sys.stderr)
+        sys.exit(1)
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='SundayPyjamas AI CLI Tool',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s chat                                    # Interactive chat mode
+  %(prog)s prompt "Write a haiku about coding"     # Single prompt
+  %(prog)s batch prompts.json -o results.json     # Batch processing
+        """
+    )
+    parser.add_argument('--model', default='llama-3.3-70b-versatile', help='AI model to use')
+    
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # Interactive chat command
+    chat_parser = subparsers.add_parser('chat', help='Start interactive chat')
+    
+    # Single prompt command
+    prompt_parser = subparsers.add_parser('prompt', help='Process single prompt')
+    prompt_parser.add_argument('text', help='The prompt text')
+    prompt_parser.add_argument('--output', '-o', help='Output file (default: stdout)')
+    
+    # Batch processing command
+    batch_parser = subparsers.add_parser('batch', help='Process prompts from file')
+    batch_parser.add_argument('file', help='JSON file with prompts')
+    batch_parser.add_argument('--output', '-o', help='Output file (default: stdout)')
+    
+    args = parser.parse_args()
+    
+    if not API_KEY:
+        console.print("[red]Error: SUNDAYPYJAMAS_API_KEY environment variable not set[/red]", file=sys.stderr)
+        sys.exit(1)
+    
+    if args.command == 'chat':
+        interactive_chat()
+    
+    elif args.command == 'prompt':
+        response = single_prompt(args.text, args.model)
+        
+        if args.output:
+            with open(args.output, 'w') as f:
+                f.write(response)
+            console.print(f"[green]Response saved to {args.output}[/green]")
+        else:
+            console.print(Markdown(response))
+    
+    elif args.command == 'batch':
+        results = batch_from_file(args.file, args.model)
+        
+        output_data = {
+            'model': args.model,
+            'total_prompts': len(results),
+            'successful': sum(1 for r in results if r['success']),
+            'failed': sum(1 for r in results if not r['success']),
+            'results': results
+        }
+        
+        if args.output:
+            with open(args.output, 'w') as f:
+                json.dump(output_data, f, indent=2)
+            console.print(f"[green]Results saved to {args.output}[/green]")
+        else:
+            console.print_json(data=output_data)
+    
+    else:
+        parser.print_help()
+
+if __name__ == '__main__':
+    main()
+```
+
+### Usage Examples
+
+```bash
+# Make the CLI executable
+chmod +x sundaypyjamas_cli.py
+
+# Interactive chat
+python sundaypyjamas_cli.py chat
+
+# Single prompt
+python sundaypyjamas_cli.py prompt "Write a haiku about programming"
+
+# Single prompt with output file
+python sundaypyjamas_cli.py prompt "Explain quantum computing" --output quantum_explanation.txt
+
+# Batch processing
+echo '[
+  "Write a short story about AI",
+  "Explain photosynthesis", 
+  "Create a recipe for chocolate cake"
+]' > prompts.json
+
+python sundaypyjamas_cli.py batch prompts.json --output results.json
+
+# Using different model
+python sundaypyjamas_cli.py prompt "Hello world" --model llama-3.3-70b-versatile
+```
+
+## Testing
+
+### Unit Tests
+
+```python
+# tests/test_client.py
+import pytest
+import responses
+from unittest.mock import patch, MagicMock
+from sundaypyjamas_client import SundayPyjamasClient, APIError
+
+class TestSundayPyjamasClient:
+    def setup_method(self):
+        self.api_key = "spj_ai_test_key"
+        self.api_url = "https://test-api.com/v1"
+        self.client = SundayPyjamasClient(self.api_key, self.api_url)
+
+    @responses.activate
+    def test_successful_chat_request(self):
+        # Mock successful API response
+        responses.add(
+            responses.POST,
+            f"{self.api_url}/chat",
+            body="Hello! This is a test response.",
+            status=200,
+            content_type="text/plain"
+        )
+
+        messages = [{"role": "user", "content": "Hello"}]
+        result = self.client.chat(messages)
+
+        assert result == "Hello! This is a test response."
+        assert len(responses.calls) == 1
+        assert responses.calls[0].request.url == f"{self.api_url}/chat"
+
+    @responses.activate
+    def test_api_error_handling(self):
+        # Mock API error response
+        responses.add(
+            responses.POST,
+            f"{self.api_url}/chat",
+            json={"error": "Invalid API key"},
+            status=401
+        )
+
+        messages = [{"role": "user", "content": "Hello"}]
+        
+        with pytest.raises(APIError) as exc_info:
+            self.client.chat(messages)
+        
+        assert exc_info.value.status_code == 401
+        assert "Invalid API key" in str(exc_info.value)
+
+    @patch('time.sleep')  # Mock sleep to speed up tests
+    @responses.activate
+    def test_retry_logic(self, mock_sleep):
+        # Mock first request to fail, second to succeed
+        responses.add(
+            responses.POST,
+            f"{self.api_url}/chat",
+            json={"error": "Server error"},
+            status=500
+        )
+        responses.add(
+            responses.POST,
+            f"{self.api_url}/chat",
+            body="Success after retry!",
+            status=200
+        )
+
+        messages = [{"role": "user", "content": "Hello"}]
+        result = self.client.chat(messages)
+
+        assert result == "Success after retry!"
+        assert len(responses.calls) == 2
+        assert mock_sleep.called  # Verify backoff was used
+
+    def test_input_validation(self):
+        with pytest.raises(ValueError):
+            SundayPyjamasClient("", self.api_url)
+        
+        with pytest.raises(ValueError):
+            SundayPyjamasClient(self.api_key, "")
+
+# Run tests
+if __name__ == "__main__":
+    pytest.main([__file__])
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="JavaScript Examples" icon="js" href="/examples/javascript">
+    Explore comprehensive JavaScript/TypeScript implementations
+  </Card>
+  <Card title="cURL Examples" icon="terminal" href="/examples/curl">
+    Command-line examples for testing and automation
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/rate-limits">
+    Learn about optimization and usage tracking
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/errors">
+    Master robust error handling patterns
+  </Card>
+</CardGroup>
+
+<Tip>
+All Python examples include comprehensive error handling, retry logic, and are production-ready. The async examples provide better performance for high-throughput applications.
+</Tip>

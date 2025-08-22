@@ -1,0 +1,1129 @@
+---
+title: "JavaScript/TypeScript Examples"
+description: "Complete examples for integrating the SundayPyjamas AI Suite API with JavaScript and TypeScript applications"
+---
+
+## Overview
+
+This guide provides comprehensive JavaScript and TypeScript examples for integrating with the SundayPyjamas AI Suite API. All examples include proper error handling, type safety, and production-ready patterns.
+
+<Info>
+Examples work in both Node.js and browser environments. TypeScript definitions are included for better development experience.
+</Info>
+
+## Installation
+
+### Basic Setup
+
+No additional packages are required for basic usage with modern environments:
+
+```bash
+# For Node.js < 18, install fetch polyfill
+npm install node-fetch
+
+# For TypeScript support
+npm install @types/node
+
+# Optional: For React examples
+npm install react @types/react
+```
+
+### Environment Variables
+
+Create a `.env` file for secure configuration:
+
+```bash
+# .env
+SUNDAYPYJAMAS_API_KEY=spj_ai_your_api_key_here
+SUNDAYPYJAMAS_API_URL=https://suite.sundaypyjamas.com/api/v1
+```
+
+### TypeScript Configuration
+
+```typescript
+// config.ts
+export const config = {
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY!,
+  apiUrl: process.env.SUNDAYPYJAMAS_API_URL || 'https://suite.sundaypyjamas.com/api/v1'
+};
+
+if (!config.apiKey) {
+  throw new Error('SUNDAYPYJAMAS_API_KEY environment variable is required');
+}
+```
+
+## Basic Examples
+
+### Simple Chat Request
+
+<CodeGroup>
+```typescript TypeScript
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+interface ChatRequest {
+  messages: ChatMessage[];
+  model?: string;
+}
+
+async function sendChatMessage(messages: ChatMessage[]): Promise<string> {
+  const response = await fetch(`${config.apiUrl}/chat`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${config.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messages,
+      model: 'llama-3.3-70b-versatile'
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`API Error: ${error.error}`);
+  }
+
+  // Read the streaming response
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let fullResponse = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    const chunk = decoder.decode(value);
+    fullResponse += chunk;
+  }
+
+  return fullResponse;
+}
+
+// Usage
+const messages: ChatMessage[] = [
+  { role: 'user', content: 'Write a professional email about a project update.' }
+];
+
+try {
+  const response = await sendChatMessage(messages);
+  console.log('AI Response:', response);
+} catch (error) {
+  console.error('Error:', error.message);
+}
+```
+
+```javascript JavaScript
+async function sendChatMessage(messages) {
+  const response = await fetch(`${process.env.SUNDAYPYJAMAS_API_URL}/chat`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.SUNDAYPYJAMAS_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messages,
+      model: 'llama-3.3-70b-versatile'
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`API Error: ${error.error}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let fullResponse = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    fullResponse += decoder.decode(value);
+  }
+
+  return fullResponse;
+}
+
+// Usage
+const messages = [
+  { role: 'user', content: 'Write a professional email about a project update.' }
+];
+
+try {
+  const response = await sendChatMessage(messages);
+  console.log('AI Response:', response);
+} catch (error) {
+  console.error('Error:', error.message);
+}
+```
+</CodeGroup>
+
+## Streaming Responses
+
+### Real-time Streaming
+
+```typescript
+async function streamChatResponse(
+  messages: ChatMessage[],
+  onChunk: (chunk: string) => void,
+  onComplete: (fullResponse: string) => void,
+  onError: (error: Error) => void
+): Promise<void> {
+  try {
+    const response = await fetch(`${config.apiUrl}/chat`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`API Error: ${error.error}`);
+    }
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value);
+      fullResponse += chunk;
+      onChunk(chunk);
+    }
+
+    onComplete(fullResponse);
+  } catch (error) {
+    onError(error as Error);
+  }
+}
+
+// Usage
+const messages: ChatMessage[] = [
+  { role: 'user', content: 'Explain quantum computing in simple terms.' }
+];
+
+await streamChatResponse(
+  messages,
+  (chunk) => {
+    process.stdout.write(chunk); // Print each chunk as it arrives
+  },
+  (fullResponse) => {
+    console.log('\n\nComplete response received!');
+    console.log('Full response length:', fullResponse.length);
+  },
+  (error) => {
+    console.error('Streaming error:', error.message);
+  }
+);
+```
+
+## React Chat Component
+
+### Complete Chat Interface
+
+```tsx
+// ChatInterface.tsx
+import React, { useState, useRef, useEffect } from 'react';
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
+
+interface ChatInterfaceProps {
+  apiKey: string;
+  apiUrl: string;
+}
+
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ apiKey, apiUrl }) => {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [streamingResponse, setStreamingResponse] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(scrollToBottom, [messages, streamingResponse]);
+
+  const sendMessage = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      role: 'user',
+      content: input.trim(),
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+    setStreamingResponse('');
+
+    const chatMessages = [
+      ...messages.map(m => ({ role: m.role, content: m.content })),
+      { role: 'user', content: userMessage.content }
+    ];
+
+    try {
+      await streamChatResponse(
+        chatMessages,
+        (chunk) => {
+          setStreamingResponse(prev => prev + chunk);
+        },
+        (fullResponse) => {
+          const assistantMessage: Message = {
+            role: 'assistant',
+            content: fullResponse,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, assistantMessage]);
+          setStreamingResponse('');
+          setIsLoading(false);
+        },
+        (error) => {
+          console.error('Chat error:', error);
+          setIsLoading(false);
+          setStreamingResponse('');
+          // Show error message to user
+        }
+      );
+    } catch (error) {
+      console.error('Chat error:', error);
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="chat-interface">
+      <div className="messages">
+        {messages.map((message, index) => (
+          <div key={index} className={`message ${message.role}`}>
+            <div className="message-content">{message.content}</div>
+            <div className="message-time">
+              {message.timestamp.toLocaleTimeString()}
+            </div>
+          </div>
+        ))}
+        
+        {/* Show streaming response */}
+        {streamingResponse && (
+          <div className="message assistant">
+            <div className="message-content">{streamingResponse}</div>
+            <div className="typing-indicator">...</div>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="input-area">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+          placeholder="Type your message..."
+          disabled={isLoading}
+        />
+        <button onClick={sendMessage} disabled={isLoading || !input.trim()}>
+          {isLoading ? 'Sending...' : 'Send'}
+        </button>
+      </div>
+
+      <style jsx>{`
+        .chat-interface {
+          max-width: 600px;
+          margin: 0 auto;
+          padding: 20px;
+          font-family: system-ui, -apple-system, sans-serif;
+        }
+        
+        .messages {
+          height: 400px;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 16px;
+          overflow-y: auto;
+          margin-bottom: 16px;
+          background: #f8fafc;
+        }
+        
+        .message {
+          margin-bottom: 12px;
+          padding: 10px 12px;
+          border-radius: 8px;
+          max-width: 80%;
+        }
+        
+        .message.user {
+          background: #3b82f6;
+          color: white;
+          margin-left: auto;
+          text-align: right;
+        }
+        
+        .message.assistant {
+          background: white;
+          border: 1px solid #e2e8f0;
+        }
+        
+        .message-time {
+          font-size: 0.75rem;
+          opacity: 0.7;
+          margin-top: 4px;
+        }
+        
+        .typing-indicator {
+          color: #6b7280;
+          font-style: italic;
+          margin-top: 4px;
+        }
+        
+        .input-area {
+          display: flex;
+          gap: 8px;
+        }
+        
+        input {
+          flex: 1;
+          padding: 10px 12px;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          font-size: 14px;
+        }
+        
+        input:focus {
+          outline: none;
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        button {
+          padding: 10px 20px;
+          background: #3b82f6;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        
+        button:hover:not(:disabled) {
+          background: #2563eb;
+        }
+        
+        button:disabled {
+          background: #9ca3af;
+          cursor: not-allowed;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default ChatInterface;
+```
+
+## Content Generation
+
+### Blog Post Generator
+
+```typescript
+interface BlogPostRequest {
+  topic: string;
+  tone: 'professional' | 'casual' | 'academic' | 'creative';
+  length: 'short' | 'medium' | 'long';
+  audience: string;
+}
+
+class ContentGenerator {
+  private apiKey: string;
+  private apiUrl: string;
+
+  constructor(apiKey: string, apiUrl: string) {
+    this.apiKey = apiKey;
+    this.apiUrl = apiUrl;
+  }
+
+  async generateBlogPost(request: BlogPostRequest): Promise<string> {
+    const systemPrompt = `You are a professional content writer. Write engaging, well-structured blog posts tailored to the specified audience and tone. Include:
+- Compelling introduction
+- Clear section headers
+- Practical insights
+- Strong conclusion`;
+
+    const lengthGuide = {
+      short: '500-800 words',
+      medium: '1000-1500 words',
+      long: '2000-3000 words'
+    };
+
+    const userPrompt = `Write a ${request.tone} blog post about "${request.topic}" for ${request.audience}. 
+Target length: ${lengthGuide[request.length]}.`;
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+
+    return await this.sendRequest(messages);
+  }
+
+  async generateEmail(purpose: string, recipient: string, tone: string): Promise<string> {
+    const systemPrompt = `You are a professional email writer. Write clear, effective emails that achieve their purpose while maintaining the appropriate tone.`;
+
+    const userPrompt = `Write a ${tone} email to ${recipient} about ${purpose}. Include:
+- Clear subject line
+- Proper greeting
+- Concise body
+- Appropriate closing`;
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+
+    return await this.sendRequest(messages);
+  }
+
+  async generateMarketingCopy(product: string, audience: string, format: string): Promise<string> {
+    const systemPrompt = `You are an expert copywriter specializing in conversion-focused marketing content. Write compelling copy that drives action.`;
+
+    const userPrompt = `Write ${format} marketing copy for "${product}" targeting ${audience}. Focus on benefits, create urgency, and include a clear call-to-action.`;
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+
+    return await this.sendRequest(messages);
+  }
+
+  private async sendRequest(messages: ChatMessage[]): Promise<string> {
+    const response = await fetch(`${this.apiUrl}/chat`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`API Error: ${error.error}`);
+    }
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      fullResponse += decoder.decode(value);
+    }
+
+    return fullResponse;
+  }
+}
+
+// Usage
+const generator = new ContentGenerator(config.apiKey, config.apiUrl);
+
+// Generate a blog post
+const blogPost = await generator.generateBlogPost({
+  topic: 'Sustainable Web Development Practices',
+  tone: 'professional',
+  length: 'medium',
+  audience: 'web developers'
+});
+
+console.log('Generated blog post:', blogPost);
+
+// Generate an email
+const email = await generator.generateEmail(
+  'following up on our meeting about the new project timeline',
+  'project stakeholders',
+  'professional'
+);
+
+console.log('Generated email:', email);
+```
+
+## Error Handling
+
+### Robust Error Handling
+
+```typescript
+class APIError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string
+  ) {
+    super(message);
+    this.name = 'APIError';
+  }
+}
+
+class SundayPyjamasClient {
+  private apiKey: string;
+  private apiUrl: string;
+  private maxRetries: number;
+
+  constructor(apiKey: string, apiUrl: string, maxRetries = 3) {
+    this.apiKey = apiKey;
+    this.apiUrl = apiUrl;
+    this.maxRetries = maxRetries;
+  }
+
+  async chat(messages: ChatMessage[], options?: { model?: string }): Promise<string> {
+    return await this.retryRequest(async () => {
+      const response = await fetch(`${this.apiUrl}/chat`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages,
+          model: options?.model || 'llama-3.3-70b-versatile'
+        })
+      });
+
+      await this.handleResponse(response);
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fullResponse += decoder.decode(value);
+      }
+
+      return fullResponse;
+    });
+  }
+
+  private async handleResponse(response: Response): Promise<void> {
+    if (response.ok) return;
+
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    
+    switch (response.status) {
+      case 401:
+        throw new APIError('Invalid API key', 401, 'INVALID_API_KEY');
+      case 403:
+        throw new APIError('Token limit exceeded or insufficient permissions', 403, 'FORBIDDEN');
+      case 429:
+        throw new APIError('Rate limit exceeded', 429, 'RATE_LIMITED');
+      case 500:
+        throw new APIError('Internal server error', 500, 'INTERNAL_ERROR');
+      default:
+        throw new APIError(errorData.error || 'Unknown error', response.status);
+    }
+  }
+
+  private async retryRequest<T>(request: () => Promise<T>): Promise<T> {
+    let lastError: Error;
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        return await request();
+      } catch (error) {
+        lastError = error as Error;
+        
+        // Don't retry on authentication or permission errors
+        if (error instanceof APIError && [401, 403].includes(error.status)) {
+          throw error;
+        }
+
+        // Don't retry on the last attempt
+        if (attempt === this.maxRetries) {
+          throw error;
+        }
+
+        // Exponential backoff
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        console.log(`Retrying request (attempt ${attempt + 2}/${this.maxRetries + 1})...`);
+      }
+    }
+
+    throw lastError!;
+  }
+}
+
+// Usage with error handling
+const client = new SundayPyjamasClient(config.apiKey, config.apiUrl);
+
+try {
+  const response = await client.chat([
+    { role: 'user', content: 'Hello!' }
+  ]);
+  console.log('Response:', response);
+} catch (error) {
+  if (error instanceof APIError) {
+    console.error(`API Error (${error.status}):`, error.message);
+    
+    switch (error.code) {
+      case 'INVALID_API_KEY':
+        console.log('Please check your API key configuration');
+        break;
+      case 'RATE_LIMITED':
+        console.log('Please wait before making more requests');
+        break;
+      case 'FORBIDDEN':
+        console.log('Check your token usage or permissions');
+        break;
+      default:
+        console.log('An unexpected error occurred');
+    }
+  } else {
+    console.error('Unexpected error:', error.message);
+  }
+}
+```
+
+## Node.js Server Example
+
+### Express.js API Server
+
+```typescript
+// server.ts
+import express from 'express';
+import { SundayPyjamasClient } from './client';
+import { streamChatResponse } from './streaming';
+
+const app = express();
+app.use(express.json());
+
+const client = new SundayPyjamasClient(
+  process.env.SUNDAYPYJAMAS_API_KEY!,
+  process.env.SUNDAYPYJAMAS_API_URL!
+);
+
+// Chat endpoint
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { messages, model } = req.body;
+    
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'Messages array is required' });
+    }
+
+    const response = await client.chat(messages, { model });
+    res.json({ response });
+  } catch (error) {
+    console.error('Chat error:', error);
+    
+    if (error instanceof APIError) {
+      res.status(error.status).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+});
+
+// Streaming chat endpoint
+app.post('/api/chat/stream', async (req, res) => {
+  try {
+    const { messages, model } = req.body;
+    
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'Messages array is required' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    await streamChatResponse(
+      messages,
+      (chunk) => {
+        res.write(chunk);
+      },
+      (fullResponse) => {
+        res.end();
+      },
+      (error) => {
+        res.write(`Error: ${error.message}`);
+        res.end();
+      }
+    );
+  } catch (error) {
+    console.error('Streaming error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+```
+
+## Browser Usage
+
+### Frontend Integration
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat Interface</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .chat-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .chat-header {
+            background: #3b82f6;
+            color: white;
+            padding: 16px 20px;
+            font-weight: 600;
+        }
+        
+        .messages {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #fafafa;
+        }
+        
+        .message {
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            border-radius: 18px;
+            max-width: 80%;
+            line-height: 1.4;
+        }
+        
+        .message.user {
+            background: #3b82f6;
+            color: white;
+            margin-left: auto;
+        }
+        
+        .message.assistant {
+            background: white;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 12px;
+        }
+        
+        #messageInput {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 24px;
+            font-size: 14px;
+            outline: none;
+        }
+        
+        #messageInput:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        #sendButton {
+            padding: 12px 24px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        #sendButton:hover:not(:disabled) {
+            background: #2563eb;
+        }
+        
+        #sendButton:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        
+        .typing {
+            color: #6b7280;
+            font-style: italic;
+            padding: 12px 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            SundayPyjamas AI Assistant
+        </div>
+        <div class="messages" id="messages">
+            <div class="message assistant">
+                Hello! I'm your AI assistant. How can I help you today?
+            </div>
+        </div>
+        <div class="input-container">
+            <input 
+                type="text" 
+                id="messageInput" 
+                placeholder="Type your message..."
+                autocomplete="off"
+            >
+            <button id="sendButton">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - In production, use environment variables
+        const API_CONFIG = {
+            url: 'https://suite.sundaypyjamas.com/api/v1',
+            // Note: API key should come from your backend, not stored in frontend
+            key: 'your_api_key_here' // This should be handled by your backend
+        };
+
+        const messages = [];
+        const messagesContainer = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+
+        async function sendMessage() {
+            const userMessage = messageInput.value.trim();
+            if (!userMessage || sendButton.disabled) return;
+
+            // Add user message
+            addMessage('user', userMessage);
+            messages.push({ role: 'user', content: userMessage });
+            messageInput.value = '';
+            sendButton.disabled = true;
+
+            // Show typing indicator
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'typing';
+            typingDiv.textContent = 'AI is typing...';
+            messagesContainer.appendChild(typingDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            try {
+                // Note: In production, make this request to your backend proxy
+                const response = await fetch(`${API_CONFIG.url}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_CONFIG.key}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ messages })
+                });
+
+                // Remove typing indicator
+                messagesContainer.removeChild(typingDiv);
+
+                if (!response.ok) {
+                    throw new Error('Failed to get response');
+                }
+
+                // Handle streaming response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let aiResponse = '';
+                
+                // Create message element for streaming
+                const aiMessageDiv = document.createElement('div');
+                aiMessageDiv.className = 'message assistant';
+                messagesContainer.appendChild(aiMessageDiv);
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    aiResponse += chunk;
+                    aiMessageDiv.textContent = aiResponse;
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+
+                messages.push({ role: 'assistant', content: aiResponse });
+
+            } catch (error) {
+                console.error('Error:', error);
+                messagesContainer.removeChild(typingDiv);
+                addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
+            } finally {
+                sendButton.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        function addMessage(role, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.textContent = content;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Focus input on load
+        messageInput.focus();
+    </script>
+</body>
+</html>
+```
+
+## Testing
+
+### Unit Tests
+
+```typescript
+// tests/client.test.ts
+import { SundayPyjamasClient, APIError } from '../src/client';
+
+// Mock fetch
+global.fetch = jest.fn();
+
+describe('SundayPyjamasClient', () => {
+  let client: SundayPyjamasClient;
+  const mockApiKey = 'spj_ai_test_key';
+  const mockApiUrl = 'https://test-api.com/v1';
+
+  beforeEach(() => {
+    client = new SundayPyjamasClient(mockApiKey, mockApiUrl);
+    jest.clearAllMocks();
+  });
+
+  it('should make successful chat request', async () => {
+    const mockResponse = 'Hello! This is a test response.';
+    
+    (fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(mockResponse) })
+            .mockResolvedValueOnce({ done: true })
+        })
+      }
+    });
+
+    const messages = [{ role: 'user', content: 'Hello' }];
+    const result = await client.chat(messages);
+
+    expect(result).toBe(mockResponse);
+    expect(fetch).toHaveBeenCalledWith(
+      `${mockApiUrl}/chat`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${mockApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ messages, model: 'llama-3.3-70b-versatile' })
+      })
+    );
+  });
+
+  it('should handle API errors', async () => {
+    (fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: () => Promise.resolve({ error: 'Invalid API key' })
+    });
+
+    const messages = [{ role: 'user', content: 'Hello' }];
+    
+    await expect(client.chat(messages)).rejects.toThrow(APIError);
+    await expect(client.chat(messages)).rejects.toThrow('Invalid API key');
+  });
+
+  it('should retry on server errors', async () => {
+    // Mock first request to fail, second to succeed
+    (fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: 'Server error' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: jest.fn()
+              .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('Success!') })
+              .mockResolvedValueOnce({ done: true })
+          })
+        }
+      });
+
+    const messages = [{ role: 'user', content: 'Hello' }];
+    const result = await client.chat(messages);
+
+    expect(result).toBe('Success!');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Python Examples" icon="python" href="/examples/python">
+    Explore comprehensive Python implementations with async support
+  </Card>
+  <Card title="cURL Examples" icon="terminal" href="/examples/curl">
+    Command-line examples for testing and automation
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/rate-limits">
+    Learn about optimization and usage tracking
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/errors">
+    Master robust error handling patterns
+  </Card>
+</CardGroup>
+
+<Tip>
+All JavaScript examples can be easily adapted for TypeScript by adding type annotations. The examples shown include full TypeScript support for better development experience.
+</Tip>

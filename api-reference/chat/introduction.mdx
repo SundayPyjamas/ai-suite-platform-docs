@@ -1,0 +1,421 @@
+---
+title: "Chat API Reference"
+description: "Complete API reference for the SundayPyjamas AI Suite Chat API with interactive examples"
+---
+
+## Overview
+
+The Chat API is the core endpoint for conversational AI, content generation, and text completion. It provides access to powerful language models with streaming responses for real-time interactions.
+
+<Info>
+This reference includes all request/response schemas, parameters, and interactive examples you can test directly.
+</Info>
+
+## Base URL
+
+```
+https://suite.sundaypyjamas.com/api/v1
+```
+
+## Authentication
+
+All API requests require authentication using your API key:
+
+```http
+Authorization: Bearer spj_ai_your_api_key_here
+```
+
+<Note>
+Learn more about [API key generation and management](/authentication).
+</Note>
+
+## Endpoints
+
+<CardGroup cols={1}>
+  <Card title="POST /chat" icon="comments" href="/api-reference/chat/post-chat">
+    Send messages to AI models and receive streaming responses
+  </Card>
+</CardGroup>
+
+## Quick Example
+
+Here's a simple example to get you started:
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello! Write me a professional email greeting."
+      }
+    ]
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://suite.sundaypyjamas.com/api/v1/chat', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer spj_ai_your_api_key_here',
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    messages: [
+      { role: 'user', content: 'Hello! Write me a professional email greeting.' }
+    ]
+  })
+});
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+let result = '';
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  result += decoder.decode(value);
+}
+
+console.log(result);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://suite.sundaypyjamas.com/api/v1/chat',
+    headers={
+        'Authorization': 'Bearer spj_ai_your_api_key_here',
+        'Content-Type': 'application/json',
+    },
+    json={
+        'messages': [
+            {
+                'role': 'user',
+                'content': 'Hello! Write me a professional email greeting.'
+            }
+        ]
+    },
+    stream=True
+)
+
+full_response = ''
+for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+    if chunk:
+        full_response += chunk
+
+print(full_response)
+```
+</CodeGroup>
+
+## Common Patterns
+
+### System Messages
+
+Use system messages to set the AI's behavior and context:
+
+```json
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that writes professional emails."
+    },
+    {
+      "role": "user",
+      "content": "Write a follow-up email after a job interview."
+    }
+  ]
+}
+```
+
+### Multi-turn Conversations
+
+Include conversation history for context:
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "What's the weather like?"
+    },
+    {
+      "role": "assistant",
+      "content": "I don't have access to real-time weather data..."
+    },
+    {
+      "role": "user",
+      "content": "What about general weather patterns?"
+    }
+  ]
+}
+```
+
+### Content Generation
+
+Structure prompts for specific content types:
+
+```json
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a content marketing expert. Write engaging blog posts with clear structure and actionable insights."
+    },
+    {
+      "role": "user",
+      "content": "Write a blog post about remote work productivity tips for software developers. Target length: 1000 words."
+    }
+  ]
+}
+```
+
+## Error Handling
+
+All errors return a consistent format:
+
+```json
+{
+  "error": "Human-readable error message"
+}
+```
+
+Common HTTP status codes:
+
+<AccordionGroup>
+<Accordion title="400 Bad Request">
+Invalid request format or missing required fields.
+
+**Example:**
+```json
+{
+  "error": "Messages array is required"
+}
+```
+</Accordion>
+
+<Accordion title="401 Unauthorized">
+Invalid or missing API key.
+
+**Example:**
+```json
+{
+  "error": "Invalid API key"
+}
+```
+</Accordion>
+
+<Accordion title="403 Forbidden">
+Token limit exceeded or insufficient permissions.
+
+**Example:**
+```json
+{
+  "error": "Token limit exceeded"
+}
+```
+</Accordion>
+
+<Accordion title="429 Too Many Requests">
+Rate limit exceeded.
+
+**Example:**
+```json
+{
+  "error": "Rate limit exceeded"
+}
+```
+</Accordion>
+
+<Accordion title="500 Internal Server Error">
+Server-side error occurred.
+
+**Example:**
+```json
+{
+  "error": "Failed to generate response"
+}
+```
+</Accordion>
+</AccordionGroup>
+
+## Rate Limits
+
+<CardGroup cols={2}>
+  <Card title="Token-based Limits" icon="coins">
+    Usage measured in tokens (input + output)
+  </Card>
+  <Card title="Request Rate" icon="clock">
+    No hard limits, but monitored for abuse
+  </Card>
+  <Card title="Workspace Quotas" icon="building">
+    Monthly token limits per workspace
+  </Card>
+  <Card title="Concurrent Requests" icon="layer-group">
+    Multiple simultaneous requests supported
+  </Card>
+</CardGroup>
+
+<Tip>
+For detailed rate limit information, see the [Rate Limits guide](/rate-limits).
+</Tip>
+
+## Best Practices
+
+### Request Optimization
+
+<AccordionGroup>
+<Accordion title="Efficient Prompting">
+- Be specific and clear in your instructions
+- Use system messages to set context once
+- Keep conversation history relevant and concise
+
+```json
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "You write concise, professional emails."
+    },
+    {
+      "role": "user",
+      "content": "Write a project status update email to stakeholders."
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="Conversation Management">
+- Trim old messages to stay within token limits
+- Keep only relevant context for the current task
+- Use consistent message formatting
+
+```javascript
+function trimConversation(messages, maxTokens = 2000) {
+  // Keep system message and recent relevant messages
+  const systemMessage = messages.find(m => m.role === 'system');
+  const recentMessages = messages.slice(-10); // Last 10 messages
+  
+  return systemMessage 
+    ? [systemMessage, ...recentMessages.filter(m => m.role !== 'system')]
+    : recentMessages;
+}
+```
+</Accordion>
+
+<Accordion title="Error Handling">
+- Always check response status codes
+- Implement retry logic for transient errors
+- Provide user-friendly error messages
+
+```javascript
+async function makeRequest(messages) {
+  try {
+    const response = await fetch('/api/v1/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ messages })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error);
+    }
+
+    return response;
+  } catch (error) {
+    console.error('API request failed:', error);
+    throw error;
+  }
+}
+```
+</Accordion>
+</AccordionGroup>
+
+## SDK Libraries
+
+<CardGroup cols={3}>
+  <Card title="JavaScript/TypeScript" icon="js">
+    Official and community libraries for Node.js and browsers
+  </Card>
+  <Card title="Python" icon="python">
+    Async and sync clients with full type support
+  </Card>
+  <Card title="Go" icon="code">
+    Community-maintained Go client library
+  </Card>
+</CardGroup>
+
+<Note>
+Official SDKs are coming soon! For now, use the examples in our [code examples section](/examples/overview).
+</Note>
+
+## Testing Tools
+
+### API Testing
+
+Use tools like Postman, Insomnia, or curl for testing:
+
+```bash
+# Test endpoint availability
+curl -X POST https://suite.sundaypyjamas.com/api/v1/chat \
+  -H "Authorization: Bearer your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "test"}]}' \
+  -w "\nStatus: %{http_code}\nTime: %{time_total}s\n"
+```
+
+### Load Testing
+
+For production readiness testing:
+
+```bash
+# Simple load test with ab (Apache Bench)
+ab -n 100 -c 10 -T application/json \
+   -H "Authorization: Bearer your_api_key" \
+   -p test_payload.json \
+   https://suite.sundaypyjamas.com/api/v1/chat
+```
+
+## Support
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book">
+    Comprehensive guides and examples
+  </Card>
+  <Card title="Community" icon="users">
+    Join discussions with other developers
+  </Card>
+  <Card title="Support" icon="headset">
+    Contact support through your workspace
+  </Card>
+  <Card title="Status Page" icon="chart-line">
+    Monitor API status and uptime
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="POST /chat Endpoint" icon="arrow-right" href="/api-reference/chat/post-chat">
+    Detailed documentation for the chat endpoint with all parameters
+  </Card>
+  <Card title="Code Examples" icon="code" href="/examples/overview">
+    Complete implementation examples in multiple languages
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/rate-limits">
+    Understanding usage limits and optimization strategies
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/errors">
+    Comprehensive error handling guide and patterns
+  </Card>
+</CardGroup>
