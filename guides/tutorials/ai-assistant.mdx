@@ -1,0 +1,1088 @@
+---
+title: "Build an AI Assistant"
+description: "Create a custom AI assistant with memory, tools, and specialized capabilities"
+---
+
+## Overview
+
+In this advanced tutorial, you'll build a sophisticated AI assistant with memory, tool integration, and specialized capabilities. This demonstrates advanced features like conversation memory, function calling, and custom tool integration.
+
+## What You'll Build
+
+- **Memory Management**: Persistent conversation context
+- **Tool Integration**: Custom functions and API integrations
+- **Specialized Knowledge**: Domain-specific expertise
+- **Multi-modal Support**: Text, code, and structured data
+- **Customizable Personality**: Tailored interaction styles
+- **Error Recovery**: Robust error handling and fallbacks
+
+## Project Setup
+
+### 1. Create New Project
+
+```bash
+npx create-next-app@latest ai-assistant
+cd ai-assistant
+```
+
+### 2. Install Dependencies
+
+```bash
+npm install lucide-react clsx tailwind-merge react-markdown rehype-highlight prismjs
+```
+
+### 3. Environment Setup
+
+Create `.env.local`:
+
+```env
+NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY=spj_ai_your_api_key_here
+OPENWEATHERMAP_API_KEY=your_weather_api_key  # For weather tool
+```
+
+## Core Architecture
+
+### 1. Memory Management System
+
+Create `lib/memory.js`:
+
+```javascript
+export class ConversationMemory {
+  constructor(maxMessages = 50) {
+    this.messages = [];
+    this.maxMessages = maxMessages;
+    this.sessions = new Map();
+  }
+
+  addMessage(sessionId, message) {
+    if (!this.sessions.has(sessionId)) {
+      this.sessions.set(sessionId, []);
+    }
+
+    const sessionMessages = this.sessions.get(sessionId);
+    sessionMessages.push({
+      ...message,
+      timestamp: Date.now(),
+      id: this.generateId()
+    });
+
+    // Keep only recent messages
+    if (sessionMessages.length > this.maxMessages) {
+      sessionMessages.splice(0, sessionMessages.length - this.maxMessages);
+    }
+
+    this.sessions.set(sessionId, sessionMessages);
+    return sessionMessages;
+  }
+
+  getMessages(sessionId, limit = null) {
+    const sessionMessages = this.sessions.get(sessionId) || [];
+    if (limit) {
+      return sessionMessages.slice(-limit);
+    }
+    return sessionMessages;
+  }
+
+  getContextSummary(sessionId, maxTokens = 1000) {
+    const messages = this.getMessages(sessionId);
+    const recentMessages = messages.slice(-10); // Last 10 messages
+
+    // Create a summary of recent conversation
+    const summary = recentMessages.map(msg => ({
+      role: msg.role,
+      content: msg.content.slice(0, 200) // Truncate long messages
+    }));
+
+    return {
+      summary,
+      messageCount: messages.length,
+      topics: this.extractTopics(messages)
+    };
+  }
+
+  extractTopics(messages) {
+    // Simple topic extraction based on keywords
+    const topics = new Set();
+    const keywords = {
+      coding: ['code', 'programming', 'javascript', 'python', 'api', 'function'],
+      weather: ['weather', 'temperature', 'forecast', 'rain', 'sunny'],
+      math: ['calculate', 'math', 'equation', 'solve', 'number'],
+      general: ['help', 'explain', 'what', 'how', 'why']
+    };
+
+    messages.forEach(message => {
+      const content = message.content.toLowerCase();
+      Object.entries(keywords).forEach(([topic, words]) => {
+        if (words.some(word => content.includes(word))) {
+          topics.add(topic);
+        }
+      });
+    });
+
+    return Array.from(topics);
+  }
+
+  clearSession(sessionId) {
+    this.sessions.delete(sessionId);
+  }
+
+  generateId() {
+    return Math.random().toString(36).substr(2, 9);
+  }
+
+  saveToStorage() {
+    if (typeof window !== 'undefined') {
+      const data = {
+        sessions: Object.fromEntries(this.sessions),
+        timestamp: Date.now()
+      };
+      localStorage.setItem('conversation-memory', JSON.stringify(data));
+    }
+  }
+
+  loadFromStorage() {
+    if (typeof window !== 'undefined') {
+      try {
+        const data = JSON.parse(localStorage.getItem('conversation-memory'));
+        if (data && data.sessions) {
+          this.sessions = new Map(Object.entries(data.sessions));
+        }
+      } catch (error) {
+        console.error('Failed to load conversation memory:', error);
+      }
+    }
+  }
+}
+
+// Global memory instance
+export const memory = new ConversationMemory();
+```
+
+### 2. Tool System
+
+Create `lib/tools.js`:
+
+```javascript
+export class ToolManager {
+  constructor() {
+    this.tools = new Map();
+    this.registerDefaultTools();
+  }
+
+  registerDefaultTools() {
+    // Weather Tool
+    this.registerTool({
+      name: 'get_weather',
+      description: 'Get current weather for a location',
+      parameters: {
+        type: 'object',
+        properties: {
+          location: {
+            type: 'string',
+            description: 'City name or location'
+          }
+        },
+        required: ['location']
+      },
+      execute: this.getWeather.bind(this)
+    });
+
+    // Calculator Tool
+    this.registerTool({
+      name: 'calculate',
+      description: 'Perform mathematical calculations',
+      parameters: {
+        type: 'object',
+        properties: {
+          expression: {
+            type: 'string',
+            description: 'Mathematical expression to evaluate'
+          }
+        },
+        required: ['expression']
+      },
+      execute: this.calculate.bind(this)
+    });
+
+    // Code Execution Tool
+    this.registerTool({
+      name: 'run_code',
+      description: 'Execute JavaScript code and return result',
+      parameters: {
+        type: 'object',
+        properties: {
+          code: {
+            type: 'string',
+            description: 'JavaScript code to execute'
+          }
+        },
+        required: ['code']
+      },
+      execute: this.runCode.bind(this)
+    });
+
+    // Web Search Tool (simplified)
+    this.registerTool({
+      name: 'web_search',
+      description: 'Search the web for information',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query'
+          }
+        },
+        required: ['query']
+      },
+      execute: this.webSearch.bind(this)
+    });
+  }
+
+  registerTool(tool) {
+    this.tools.set(tool.name, tool);
+  }
+
+  getAvailableTools() {
+    return Array.from(this.tools.values()).map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters
+    }));
+  }
+
+  async executeTool(toolName, parameters) {
+    const tool = this.tools.get(toolName);
+    if (!tool) {
+      throw new Error(`Tool '${toolName}' not found`);
+    }
+
+    try {
+      return await tool.execute(parameters);
+    } catch (error) {
+      console.error(`Tool execution error (${toolName}):`, error);
+      return { error: error.message };
+    }
+  }
+
+  // Tool implementations
+  async getWeather({ location }) {
+    try {
+      const apiKey = process.env.OPENWEATHERMAP_API_KEY;
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${apiKey}&units=metric`
+      );
+
+      if (!response.ok) {
+        throw new Error('Weather API request failed');
+      }
+
+      const data = await response.json();
+      return {
+        location: data.name,
+        temperature: Math.round(data.main.temp),
+        description: data.weather[0].description,
+        humidity: data.main.humidity,
+        windSpeed: Math.round(data.wind.speed * 3.6) // Convert m/s to km/h
+      };
+    } catch (error) {
+      return { error: 'Unable to fetch weather data' };
+    }
+  }
+
+  calculate({ expression }) {
+    try {
+      // Simple safety check
+      if (!/^[\d\s\+\-\*\/\(\)\.]+$/.test(expression)) {
+        throw new Error('Invalid characters in expression');
+      }
+
+      const result = Function('"use strict"; return (' + expression + ')')();
+      return { result: result.toString() };
+    } catch (error) {
+      return { error: 'Invalid mathematical expression' };
+    }
+  }
+
+  runCode({ code }) {
+    try {
+      // Create a safe execution context
+      const context = {
+        console: {
+          log: (...args) => args.join(' '),
+          error: (...args) => `Error: ${args.join(' ')}`
+        }
+      };
+
+      const func = new Function('context', `
+        with (context) {
+          return (${code});
+        }
+      `);
+
+      const result = func(context);
+      return { result: String(result) };
+    } catch (error) {
+      return { error: error.message };
+    }
+  }
+
+  async webSearch({ query }) {
+    // Simplified web search - in production, use a real search API
+    try {
+      // Mock search results
+      const mockResults = [
+        {
+          title: `${query} - Wikipedia`,
+          url: `https://en.wikipedia.org/wiki/${encodeURIComponent(query)}`,
+          snippet: `Information about ${query} from Wikipedia.`
+        },
+        {
+          title: `${query} - Official Documentation`,
+          url: `https://docs.example.com/${encodeURIComponent(query)}`,
+          snippet: `Official documentation for ${query}.`
+        }
+      ];
+
+      return {
+        query,
+        results: mockResults,
+        note: 'This is a mock search. Integrate with real search APIs for production use.'
+      };
+    } catch (error) {
+      return { error: 'Search failed' };
+    }
+  }
+}
+
+// Global tool manager instance
+export const toolManager = new ToolManager();
+```
+
+### 3. AI Assistant Core
+
+Create `lib/assistant.js`:
+
+```javascript
+import { memory } from './memory';
+import { toolManager } from './tools';
+
+export class AIAssistant {
+  constructor(apiKey) {
+    this.apiKey = apiKey;
+    this.baseURL = 'https://suite.sundaypyjamas.com/api/v1';
+    this.personality = 'helpful and friendly';
+    this.expertise = [];
+  }
+
+  setPersonality(personality) {
+    this.personality = personality;
+  }
+
+  setExpertise(areas) {
+    this.expertise = areas;
+  }
+
+  async chat(sessionId, userMessage, options = {}) {
+    // Add user message to memory
+    memory.addMessage(sessionId, {
+      role: 'user',
+      content: userMessage
+    });
+
+    // Get conversation context
+    const context = memory.getContextSummary(sessionId);
+    const messages = memory.getMessages(sessionId);
+
+    // Build system prompt
+    const systemPrompt = this.buildSystemPrompt(context);
+
+    // Prepare messages for API
+    const apiMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages.slice(-10).map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+    ];
+
+    // Add available tools
+    const tools = toolManager.getAvailableTools();
+
+    try {
+      const response = await fetch(`${this.baseURL}/chat`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: apiMessages,
+          tools: tools,
+          model: options.model || 'llama-3.3-70b-versatile',
+          temperature: options.temperature || 0.7,
+          max_tokens: options.maxTokens || 1000
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const assistantMessage = data.choices[0].message;
+
+      // Handle tool calls
+      if (assistantMessage.tool_calls) {
+        const toolResults = await this.handleToolCalls(assistantMessage.tool_calls);
+
+        // Add tool results to conversation
+        const toolMessage = {
+          role: 'assistant',
+          content: assistantMessage.content,
+          tool_calls: assistantMessage.tool_calls
+        };
+
+        memory.addMessage(sessionId, toolMessage);
+
+        // Add tool results
+        for (const result of toolResults) {
+          memory.addMessage(sessionId, {
+            role: 'tool',
+            content: JSON.stringify(result.result),
+            tool_call_id: result.tool_call_id
+          });
+        }
+
+        // Get final response after tool calls
+        return await this.getFinalResponse(sessionId, options);
+      } else {
+        // Add assistant response to memory
+        memory.addMessage(sessionId, {
+          role: 'assistant',
+          content: assistantMessage.content
+        });
+
+        return {
+          content: assistantMessage.content,
+          usage: data.usage
+        };
+      }
+    } catch (error) {
+      console.error('Assistant chat error:', error);
+      throw error;
+    }
+  }
+
+  async handleToolCalls(toolCalls) {
+    const results = [];
+
+    for (const toolCall of toolCalls) {
+      try {
+        const parameters = JSON.parse(toolCall.function.arguments);
+        const result = await toolManager.executeTool(
+          toolCall.function.name,
+          parameters
+        );
+
+        results.push({
+          tool_call_id: toolCall.id,
+          result
+        });
+      } catch (error) {
+        results.push({
+          tool_call_id: toolCall.id,
+          result: { error: error.message }
+        });
+      }
+    }
+
+    return results;
+  }
+
+  async getFinalResponse(sessionId, options) {
+    const messages = memory.getMessages(sessionId);
+    const recentMessages = messages.slice(-5); // Last 5 messages including tools
+
+    const apiMessages = recentMessages.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      ...(msg.tool_calls && { tool_calls: msg.tool_calls }),
+      ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id })
+    }));
+
+    const response = await fetch(`${this.baseURL}/chat`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: apiMessages,
+        model: options.model || 'llama-3.3-70b-versatile'
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const assistantMessage = data.choices[0].message;
+
+    // Add final response to memory
+    memory.addMessage(sessionId, {
+      role: 'assistant',
+      content: assistantMessage.content
+    });
+
+    return {
+      content: assistantMessage.content,
+      usage: data.usage
+    };
+  }
+
+  buildSystemPrompt(context) {
+    let prompt = `You are a ${this.personality} AI assistant`;
+
+    if (this.expertise.length > 0) {
+      prompt += ` with expertise in: ${this.expertise.join(', ')}`;
+    }
+
+    prompt += `. `;
+
+    // Add context awareness
+    if (context.topics.length > 0) {
+      prompt += `The user has been discussing: ${context.topics.join(', ')}. `;
+    }
+
+    if (context.messageCount > 10) {
+      prompt += `This is a detailed conversation with ${context.messageCount} messages so far. `;
+    }
+
+    prompt += `
+You have access to various tools that can help you provide better assistance:
+- get_weather: Get current weather information
+- calculate: Perform mathematical calculations
+- run_code: Execute JavaScript code safely
+- web_search: Search for information on the web
+
+When using tools, explain what you're doing and why. Be helpful, accurate, and engaging.`;
+
+    return prompt;
+  }
+
+  clearMemory(sessionId) {
+    memory.clearSession(sessionId);
+  }
+
+  getMemorySummary(sessionId) {
+    return memory.getContextSummary(sessionId);
+  }
+}
+
+// Export singleton instance
+export const assistant = new AIAssistant(process.env.NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY);
+```
+
+### 4. Main Assistant Component
+
+Create `components/AIAssistant.jsx`:
+
+```jsx
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { Send, User, Bot, Settings, Trash2, Brain } from 'lucide-react';
+import { assistant } from '../lib/assistant';
+import { memory } from '../lib/memory';
+import Message from './Message';
+
+export default function AIAssistant() {
+  const [sessionId] = useState(() => `session_${Date.now()}`);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [personality, setPersonality] = useState('helpful and friendly');
+  const [expertise, setExpertise] = useState([]);
+  const [showSettings, setShowSettings] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    memory.loadFromStorage();
+    const savedMessages = memory.getMessages(sessionId);
+    setMessages(savedMessages);
+  }, [sessionId]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const userMessage = input.trim();
+    setInput('');
+    setIsLoading(true);
+
+    // Add user message immediately
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: userMessage,
+      timestamp: Date.now()
+    }]);
+
+    try {
+      // Set assistant personality and expertise
+      assistant.setPersonality(personality);
+      assistant.setExpertise(expertise);
+
+      // Get AI response
+      const response = await assistant.chat(sessionId, userMessage);
+
+      // Add assistant response
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: response.content,
+        timestamp: Date.now()
+      }]);
+
+      // Save to storage
+      memory.saveToStorage();
+    } catch (error) {
+      console.error('Chat error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
+        timestamp: Date.now(),
+        error: true
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const clearConversation = () => {
+    assistant.clearMemory(sessionId);
+    setMessages([]);
+    memory.saveToStorage();
+  };
+
+  const expertiseOptions = [
+    'Programming & Development',
+    'Data Science & AI',
+    'Web Development',
+    'System Administration',
+    'Business & Marketing',
+    'Writing & Content Creation',
+    'Mathematics & Logic',
+    'General Knowledge'
+  ];
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div className="bg-white border-b p-4 flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+              <Brain className="w-5 h-5" />
+              AI Assistant
+            </h1>
+            <p className="text-sm text-gray-600">
+              Powered by SundayPyjamas AI Suite
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+            <button
+              onClick={clearConversation}
+              className="p-2 text-gray-500 hover:text-red-600 rounded-lg hover:bg-gray-100"
+              title="Clear conversation"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Settings Panel */}
+        {showSettings && (
+          <div className="bg-white border-b p-4 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Personality
+              </label>
+              <select
+                value={personality}
+                onChange={(e) => setPersonality(e.target.value)}
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="helpful and friendly">Helpful and Friendly</option>
+                <option value="professional and concise">Professional and Concise</option>
+                <option value="creative and imaginative">Creative and Imaginative</option>
+                <option value="analytical and detailed">Analytical and Detailed</option>
+                <option value="humorous and engaging">Humorous and Engaging</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Areas of Expertise
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {expertiseOptions.map((area) => (
+                  <label key={area} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={expertise.includes(area)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setExpertise(prev => [...prev, area]);
+                        } else {
+                          setExpertise(prev => prev.filter(a => a !== area));
+                        }
+                      }}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">{area}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center text-gray-500 mt-8">
+              <Bot className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p>Start a conversation with your AI assistant!</p>
+              <p className="text-sm mt-2">
+                You can ask me about programming, get help with tasks, or just chat.
+              </p>
+            </div>
+          )}
+
+          {messages.map((message, index) => (
+            <Message key={index} message={message} />
+          ))}
+
+          {isLoading && (
+            <div className="flex gap-4">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-white" />
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="text-sm text-gray-600 mb-1">AI Assistant</div>
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className="bg-white border-t p-4">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Type your message..."
+              disabled={isLoading}
+              className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            />
+            <button
+              onClick={handleSend}
+              disabled={isLoading || !input.trim()}
+              className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="text-xs text-gray-500 mt-2">
+            Press Enter to send, Shift+Enter for new line
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+## Running the Application
+
+### Start Development Server
+
+```bash
+npm run dev
+```
+
+### Test the AI Assistant
+
+1. **Basic Chat**: Start with simple questions like "Hello!" or "What's the weather like?"
+2. **Tool Integration**: Ask for weather: "What's the weather in London?"
+3. **Code Execution**: Try: "Calculate 15 * 37" or "Run this code: console.log('Hello World')"
+4. **Memory**: Ask follow-up questions to test conversation context
+5. **Settings**: Customize personality and expertise areas
+
+## Advanced Features
+
+### 1. Custom Tool Development
+
+Create `lib/customTools.js`:
+
+```javascript
+export class CustomToolManager {
+  constructor() {
+    this.customTools = new Map();
+  }
+
+  registerCustomTool(toolDefinition) {
+    // Validate tool definition
+    if (!toolDefinition.name || !toolDefinition.execute) {
+      throw new Error('Tool must have name and execute function');
+    }
+
+    this.customTools.set(toolDefinition.name, {
+      ...toolDefinition,
+      type: 'custom'
+    });
+  }
+
+  getCustomTools() {
+    return Array.from(this.customTools.values());
+  }
+
+  async executeCustomTool(toolName, parameters) {
+    const tool = this.customTools.get(toolName);
+    if (!tool) {
+      throw new Error(`Custom tool '${toolName}' not found`);
+    }
+
+    return await tool.execute(parameters);
+  }
+}
+
+// Example custom tool
+const databaseTool = {
+  name: 'query_database',
+  description: 'Query a database with SQL',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'SQL query to execute'
+      },
+      database: {
+        type: 'string',
+        description: 'Database name'
+      }
+    },
+    required: ['query']
+  },
+  execute: async ({ query, database }) => {
+    // Implement database connection and query execution
+    console.log(`Executing query on ${database}: ${query}`);
+    return { result: 'Query executed successfully' };
+  }
+};
+
+export const customToolManager = new CustomToolManager();
+customToolManager.registerCustomTool(databaseTool);
+```
+
+### 2. Personality Presets
+
+Create `lib/personalityPresets.js`:
+
+```javascript
+export const personalityPresets = {
+  coding_assistant: {
+    personality: 'technical and precise',
+    expertise: ['Programming & Development', 'System Administration', 'Web Development'],
+    systemPrompt: 'You are a senior software engineer with deep technical knowledge. Provide clear, accurate solutions with code examples.'
+  },
+
+  creative_writer: {
+    personality: 'creative and imaginative',
+    expertise: ['Writing & Content Creation', 'Business & Marketing'],
+    systemPrompt: 'You are a creative writing assistant. Help with stories, articles, marketing copy, and creative projects.'
+  },
+
+  data_scientist: {
+    personality: 'analytical and methodical',
+    expertise: ['Data Science & AI', 'Mathematics & Logic'],
+    systemPrompt: 'You are a data scientist. Help with data analysis, machine learning, statistics, and technical problem-solving.'
+  },
+
+  business_consultant: {
+    personality: 'professional and strategic',
+    expertise: ['Business & Marketing', 'General Knowledge'],
+    systemPrompt: 'You are a business consultant. Provide strategic advice, market analysis, and business planning guidance.'
+  },
+
+  teacher: {
+    personality: 'patient and educational',
+    expertise: ['General Knowledge', 'Mathematics & Logic'],
+    systemPrompt: 'You are an experienced teacher. Explain concepts clearly, provide examples, and help with learning.'
+  }
+};
+
+export function applyPersonalityPreset(assistant, presetName) {
+  const preset = personalityPresets[presetName];
+  if (!preset) {
+    throw new Error(`Personality preset '${presetName}' not found`);
+  }
+
+  assistant.setPersonality(preset.personality);
+  assistant.setExpertise(preset.expertise);
+
+  // You could also store the custom system prompt
+  return preset;
+}
+```
+
+## Use Cases and Examples
+
+### Development Assistant
+- **Code review**: "Review this JavaScript function and suggest improvements"
+- **Debugging**: "Help me debug this error: [error message]"
+- **Architecture**: "Design a REST API for a task management app"
+- **Best practices**: "What's the best way to handle authentication in React?"
+
+### Creative Assistant
+- **Content creation**: "Write a blog post about sustainable living"
+- **Marketing copy**: "Create a landing page headline for a productivity app"
+- **Story writing**: "Help me develop a plot for a science fiction story"
+- **Social media**: "Generate Twitter threads about AI ethics"
+
+### Educational Assistant
+- **Explanations**: "Explain quantum computing in simple terms"
+- **Tutorials**: "Create a step-by-step guide for learning React"
+- **Problem solving**: "Help me understand this math concept: calculus"
+- **Research**: "Summarize recent developments in renewable energy"
+
+### Business Assistant
+- **Strategy**: "Help me develop a marketing strategy for a new product"
+- **Analysis**: "Analyze this market trend and its implications"
+- **Planning**: "Create a business plan outline for a startup"
+- **Communication**: "Draft a professional email to a client"
+
+## Best Practices
+
+### Memory Management
+- **Context awareness**: Keep conversations focused and relevant
+- **Summarization**: Periodically summarize long conversations
+- **Session management**: Use appropriate session boundaries
+- **Privacy**: Be mindful of sensitive information in memory
+
+### Tool Integration
+- **Error handling**: Implement robust error handling for all tools
+- **Security**: Validate inputs and sanitize outputs
+- **Performance**: Cache results when appropriate
+- **Documentation**: Clearly document tool capabilities and limitations
+
+### User Experience
+- **Clear communication**: Explain what you're doing when using tools
+- **Progressive disclosure**: Show information at appropriate levels
+- **Error recovery**: Provide helpful error messages and recovery options
+- **Customization**: Allow users to adjust personality and expertise
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title="Tool Calls Not Working">
+- Verify tool definitions are correct
+- Check that tool functions are properly implemented
+- Ensure API key has necessary permissions
+- Review tool call parsing and execution logic
+</Accordion>
+
+<Accordion title="Memory Issues">
+- Check localStorage availability and quota
+- Verify session ID generation and management
+- Review memory cleanup and optimization
+- Test memory persistence across browser sessions
+</Accordion>
+
+<Accordion title="Performance Problems">
+- Implement message pagination for long conversations
+- Add caching for frequently used tool results
+- Optimize API calls and reduce unnecessary requests
+- Consider implementing conversation summarization
+</Accordion>
+
+<Accordion title="Personality Not Working">
+- Verify personality settings are being applied correctly
+- Check system prompt generation and formatting
+- Test with different personality presets
+- Review API response for personality consistency
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Advanced Memory"
+    icon="brain"
+    href="/guides/advanced/streaming-patterns"
+  >
+    Implement advanced memory management and context awareness.
+  </Card>
+  <Card
+    title="Custom Tools"
+    icon="wrench"
+    href="/guides/advanced/batch-processing"
+  >
+    Create and integrate custom tools for specific use cases.
+  </Card>
+  <Card
+    title="Multi-Modal Support"
+    icon="image"
+    href="/guides/advanced/optimization"
+  >
+    Add support for images, documents, and other media types.
+  </Card>
+  <Card
+    title="Deployment"
+    icon="cloud"
+    href="/platform/deployment/vercel"
+  >
+    Deploy your AI assistant to production environments.
+  </Card>
+</CardGroup>
+
+<Note>
+This AI assistant demonstrates the power of combining memory, tools, and customization. You can extend it with additional tools, personality presets, and specialized capabilities based on your specific needs.
+</Note>

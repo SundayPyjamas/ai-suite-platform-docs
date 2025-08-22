@@ -1,0 +1,797 @@
+---
+title: "Embedding Models"
+description: "Learn about text embedding models for semantic search and similarity"
+---
+
+## Overview
+
+Embedding models convert text into numerical vectors that capture semantic meaning. These vectors can be used for semantic search, similarity comparison, clustering, and classification tasks.
+
+## Available Models
+
+### Text-Embedding-3-Small
+
+**Model ID**: `text-embedding-3-small`
+
+#### Overview
+A compact, efficient embedding model optimized for speed and low resource usage while maintaining good semantic understanding.
+
+#### Key Features
+- **Dimensions**: 512
+- **Context Length**: 2,048 tokens
+- **Speed**: Fast inference
+- **Size**: Small footprint
+- **Cost**: Low token pricing
+
+#### Use Cases
+- Real-time applications
+- Large-scale document processing
+- Mobile applications
+- Resource-constrained environments
+
+#### Example Usage
+
+```javascript
+const response = await ai.embeddings({
+  input: "The cat sat on the mat",
+  model: "text-embedding-3-small"
+});
+
+console.log(response.data[0].embedding); // Array of 512 numbers
+```
+
+### Text-Embedding-3-Large
+
+**Model ID**: `text-embedding-3-large`
+
+#### Overview
+A high-performance embedding model with larger dimensions for more detailed semantic representation.
+
+#### Key Features
+- **Dimensions**: 3,072
+- **Context Length**: 8,192 tokens
+- **Accuracy**: Higher semantic accuracy
+- **Performance**: Better for complex tasks
+- **Size**: Larger model footprint
+
+#### Use Cases
+- Enterprise search systems
+- Academic research
+- Complex similarity tasks
+- High-accuracy applications
+
+#### Example Usage
+
+```javascript
+const response = await ai.embeddings({
+  input: ["First text", "Second text", "Third text"],
+  model: "text-embedding-3-large"
+});
+
+response.data.forEach((item, index) => {
+  console.log(`Text ${index + 1} embedding:`, item.embedding.slice(0, 5), "...");
+});
+```
+
+## API Reference
+
+### Create Embeddings
+
+#### Endpoint
+`POST /api/v1/embeddings`
+
+#### Request Parameters
+
+```typescript
+interface EmbeddingRequest {
+  input: string | string[];
+  model: string;
+  encoding_format?: "float" | "base64";
+  dimensions?: number;
+  user?: string;
+}
+```
+
+#### Response Format
+
+```typescript
+interface EmbeddingResponse {
+  object: "list";
+  data: Array<{
+    object: "embedding";
+    embedding: number[];
+    index: number;
+  }>;
+  model: string;
+  usage: {
+    prompt_tokens: number;
+    total_tokens: number;
+  };
+}
+```
+
+## Working with Embeddings
+
+### Basic Similarity Search
+
+```javascript
+class SimpleVectorSearch {
+  constructor() {
+    this.documents = [];
+    this.embeddings = [];
+  }
+
+  async addDocument(text) {
+    const response = await ai.embeddings({
+      input: text,
+      model: "text-embedding-3-large"
+    });
+
+    this.documents.push(text);
+    this.embeddings.push(response.data[0].embedding);
+  }
+
+  async search(query, topK = 5) {
+    const queryEmbedding = await ai.embeddings({
+      input: query,
+      model: "text-embedding-3-large"
+    });
+
+    const similarities = this.embeddings.map((embedding, index) => ({
+      document: this.documents[index],
+      similarity: this.cosineSimilarity(queryEmbedding.data[0].embedding, embedding),
+      index
+    }));
+
+    return similarities
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, topK);
+  }
+
+  cosineSimilarity(a, b) {
+    const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+    const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+    const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+    return dotProduct / (magnitudeA * magnitudeB);
+  }
+}
+
+// Usage
+const search = new SimpleVectorSearch();
+await search.addDocument("Machine learning is a subset of artificial intelligence");
+await search.addDocument("Deep learning uses neural networks with multiple layers");
+await search.addDocument("Natural language processing helps computers understand text");
+
+const results = await search.search("What is AI?", 2);
+console.log(results);
+```
+
+### Document Clustering
+
+```javascript
+class DocumentClustering {
+  constructor() {
+    this.kmeans = new KMeans();
+  }
+
+  async clusterDocuments(documents, k = 3) {
+    // Generate embeddings for all documents
+    const embeddings = [];
+    for (const doc of documents) {
+      const response = await ai.embeddings({
+        input: doc,
+        model: "text-embedding-3-large"
+      });
+      embeddings.push(response.data[0].embedding);
+    }
+
+    // Perform K-means clustering
+    const clusters = this.kmeans.cluster(embeddings, k);
+
+    // Group documents by cluster
+    const clustered = Array.from({ length: k }, () => []);
+    clusters.forEach((clusterId, index) => {
+      clustered[clusterId].push(documents[index]);
+    });
+
+    return clustered;
+  }
+}
+
+// Simple K-means implementation
+class KMeans {
+  cluster(vectors, k, maxIterations = 100) {
+    // Initialize centroids randomly
+    const centroids = this.initializeCentroids(vectors, k);
+
+    for (let iteration = 0; iteration < maxIterations; iteration++) {
+      // Assign points to nearest centroid
+      const assignments = vectors.map(vector => {
+        return this.findNearestCentroid(vector, centroids);
+      });
+
+      // Update centroids
+      const newCentroids = this.updateCentroids(vectors, assignments, k);
+
+      // Check convergence
+      if (this.centroidsConverged(centroids, newCentroids)) {
+        break;
+      }
+
+      centroids.splice(0, centroids.length, ...newCentroids);
+    }
+
+    return assignments;
+  }
+
+  initializeCentroids(vectors, k) {
+    const centroids = [];
+    const usedIndices = new Set();
+
+    for (let i = 0; i < k; i++) {
+      let index;
+      do {
+        index = Math.floor(Math.random() * vectors.length);
+      } while (usedIndices.has(index));
+
+      usedIndices.add(index);
+      centroids.push([...vectors[index]]);
+    }
+
+    return centroids;
+  }
+
+  findNearestCentroid(vector, centroids) {
+    let minDistance = Infinity;
+    let nearestIndex = 0;
+
+    centroids.forEach((centroid, index) => {
+      const distance = this.euclideanDistance(vector, centroid);
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestIndex = index;
+      }
+    });
+
+    return nearestIndex;
+  }
+
+  updateCentroids(vectors, assignments, k) {
+    const newCentroids = Array.from({ length: k }, () => []);
+    const counts = Array(k).fill(0);
+
+    // Group vectors by cluster
+    vectors.forEach((vector, index) => {
+      const clusterId = assignments[index];
+      newCentroids[clusterId].push(vector);
+      counts[clusterId]++;
+    });
+
+    // Calculate mean for each cluster
+    return newCentroids.map((cluster, index) => {
+      if (cluster.length === 0) return this.generateRandomCentroid();
+
+      const dimensions = cluster[0].length;
+      const mean = Array(dimensions).fill(0);
+
+      cluster.forEach(vector => {
+        vector.forEach((value, dim) => {
+          mean[dim] += value;
+        });
+      });
+
+      return mean.map(value => value / cluster.length);
+    });
+  }
+
+  centroidsConverged(oldCentroids, newCentroids) {
+    const threshold = 0.001;
+    return oldCentroids.every((centroid, index) => {
+      return this.euclideanDistance(centroid, newCentroids[index]) < threshold;
+    });
+  }
+
+  euclideanDistance(a, b) {
+    return Math.sqrt(a.reduce((sum, val, i) => sum + Math.pow(val - b[i], 2), 0));
+  }
+}
+```
+
+### Semantic Classification
+
+```javascript
+class SemanticClassifier {
+  constructor() {
+    this.categories = new Map();
+    this.categoryEmbeddings = new Map();
+  }
+
+  async addCategory(name, examples) {
+    // Generate embeddings for category examples
+    const embeddings = [];
+    for (const example of examples) {
+      const response = await ai.embeddings({
+        input: example,
+        model: "text-embedding-3-large"
+      });
+      embeddings.push(response.data[0].embedding);
+    }
+
+    // Calculate centroid for category
+    const centroid = this.calculateCentroid(embeddings);
+    this.categories.set(name, examples);
+    this.categoryEmbeddings.set(name, centroid);
+  }
+
+  async classify(text) {
+    const textEmbedding = await ai.embeddings({
+      input: text,
+      model: "text-embedding-3-large"
+    });
+
+    const similarities = Array.from(this.categoryEmbeddings.entries()).map(([category, centroid]) => ({
+      category,
+      similarity: this.cosineSimilarity(textEmbedding.data[0].embedding, centroid)
+    }));
+
+    return similarities.sort((a, b) => b.similarity - a.similarity)[0];
+  }
+
+  calculateCentroid(embeddings) {
+    const dimensions = embeddings[0].length;
+    const centroid = Array(dimensions).fill(0);
+
+    embeddings.forEach(embedding => {
+      embedding.forEach((value, index) => {
+        centroid[index] += value;
+      });
+    });
+
+    return centroid.map(value => value / embeddings.length);
+  }
+
+  cosineSimilarity(a, b) {
+    const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+    const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+    const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+    return dotProduct / (magnitudeA * magnitudeB);
+  }
+}
+
+// Usage
+const classifier = new SemanticClassifier();
+
+await classifier.addCategory('Technology', [
+  'Software development and programming',
+  'Artificial intelligence and machine learning',
+  'Web development and internet technologies',
+  'Mobile applications and app development'
+]);
+
+await classifier.addCategory('Health', [
+  'Medical treatments and healthcare',
+  'Nutrition and healthy eating',
+  'Exercise and fitness routines',
+  'Mental health and wellness'
+]);
+
+const result = await classifier.classify('I want to build a mobile app for tracking workouts');
+console.log(result); // { category: 'Technology', similarity: 0.85 }
+```
+
+## Best Practices
+
+### Embedding Optimization
+
+#### Batch Processing
+```javascript
+// Process multiple texts in batches
+async function batchEmbeddings(texts, batchSize = 20) {
+  const results = [];
+
+  for (let i = 0; i < texts.length; i += batchSize) {
+    const batch = texts.slice(i, i + batchSize);
+    const response = await ai.embeddings({
+      input: batch,
+      model: "text-embedding-3-large"
+    });
+
+    results.push(...response.data);
+  }
+
+  return results;
+}
+```
+
+#### Caching Strategy
+```javascript
+class EmbeddingCache {
+  constructor() {
+    this.cache = new Map();
+    this.maxSize = 10000;
+  }
+
+  async getEmbedding(text, model = "text-embedding-3-large") {
+    const key = `${model}:${this.hashText(text)}`;
+
+    if (this.cache.has(key)) {
+      return this.cache.get(key);
+    }
+
+    const response = await ai.embeddings({
+      input: text,
+      model
+    });
+
+    const embedding = response.data[0].embedding;
+
+    // Implement LRU eviction
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+
+    this.cache.set(key, embedding);
+    return embedding;
+  }
+
+  hashText(text) {
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      const char = text.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash.toString();
+  }
+}
+```
+
+### Performance Considerations
+
+#### Dimension Selection
+- **Small Dimensions (512)**: Faster, lower memory usage, good for simple tasks
+- **Large Dimensions (3072)**: Slower, higher memory usage, better semantic understanding
+
+#### Context Length
+- **Short Context (2048)**: Better for individual sentences or short texts
+- **Long Context (8192)**: Better for longer documents and complex relationships
+
+#### Model Selection
+- **Small Model**: Use for real-time applications and simple similarity tasks
+- **Large Model**: Use for complex semantic understanding and high-accuracy requirements
+
+## Error Handling
+
+### Common Issues
+
+```javascript
+// Robust embedding generation with error handling
+class RobustEmbedder {
+  constructor() {
+    this.maxRetries = 3;
+    this.retryDelay = 1000;
+  }
+
+  async generateEmbedding(text, options = {}) {
+    const {
+      model = 'text-embedding-3-large',
+      fallbackModel = 'text-embedding-3-small'
+    } = options;
+
+    let attempt = 0;
+    let lastError;
+
+    while (attempt < this.maxRetries) {
+      try {
+        const response = await ai.embeddings({
+          input: text,
+          model
+        });
+
+        if (!response.data || response.data.length === 0) {
+          throw new Error('No embedding data received');
+        }
+
+        return response.data[0].embedding;
+
+      } catch (error) {
+        attempt++;
+        lastError = error;
+
+        if (this.isRetryableError(error) && attempt < this.maxRetries) {
+          await this.delay(this.retryDelay * attempt);
+          continue;
+        }
+
+        // Try fallback model if available
+        if (model !== fallbackModel && fallbackModel) {
+          try {
+            const fallbackResponse = await ai.embeddings({
+              input: text,
+              model: fallbackModel
+            });
+            return fallbackResponse.data[0].embedding;
+          } catch (fallbackError) {
+            lastError = fallbackError;
+          }
+        }
+
+        break;
+      }
+    }
+
+    throw new Error(`Failed to generate embedding after ${this.maxRetries} attempts: ${lastError.message}`);
+  }
+
+  isRetryableError(error) {
+    const retryableCodes = [429, 500, 502, 503, 504];
+    return error.status && retryableCodes.includes(error.status);
+  }
+
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+```
+
+## Use Cases
+
+### 1. Semantic Search
+```javascript
+// Build a semantic search engine
+class SemanticSearchEngine {
+  constructor() {
+    this.documents = [];
+    this.embeddings = [];
+    this.embedder = new RobustEmbedder();
+  }
+
+  async addDocument(document) {
+    const embedding = await this.embedder.generateEmbedding(document.content);
+    this.documents.push(document);
+    this.embeddings.push(embedding);
+  }
+
+  async search(query, topK = 10) {
+    const queryEmbedding = await this.embedder.generateEmbedding(query);
+
+    const similarities = this.embeddings.map((embedding, index) => ({
+      document: this.documents[index],
+      similarity: this.cosineSimilarity(queryEmbedding, embedding),
+      score: this.calculateRelevanceScore(queryEmbedding, embedding)
+    }));
+
+    return similarities
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topK);
+  }
+
+  cosineSimilarity(a, b) {
+    const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+    const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+    const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+    return dotProduct / (magnitudeA * magnitudeB);
+  }
+
+  calculateRelevanceScore(queryEmbedding, docEmbedding) {
+    // Combine multiple similarity metrics
+    const cosine = this.cosineSimilarity(queryEmbedding, docEmbedding);
+    const euclidean = 1 / (1 + this.euclideanDistance(queryEmbedding, docEmbedding));
+
+    return (cosine * 0.7) + (euclidean * 0.3);
+  }
+
+  euclideanDistance(a, b) {
+    return Math.sqrt(a.reduce((sum, val, i) => sum + Math.pow(val - b[i], 2), 0));
+  }
+}
+```
+
+### 2. Content Recommendation
+```javascript
+// Build a content recommendation system
+class ContentRecommender {
+  constructor() {
+    this.userProfiles = new Map();
+    this.contentEmbeddings = new Map();
+  }
+
+  async addUserInteraction(userId, contentId, interactionType) {
+    const userEmbedding = await this.getUserEmbedding(userId);
+    const contentEmbedding = await this.getContentEmbedding(contentId);
+
+    // Update user profile based on interaction
+    const weight = this.getInteractionWeight(interactionType);
+    const updatedEmbedding = this.updateUserEmbedding(userEmbedding, contentEmbedding, weight);
+
+    this.userProfiles.set(userId, updatedEmbedding);
+  }
+
+  async recommendContent(userId, contentPool, topK = 5) {
+    const userEmbedding = this.userProfiles.get(userId);
+    if (!userEmbedding) {
+      return this.getPopularContent(contentPool, topK);
+    }
+
+    const recommendations = [];
+
+    for (const content of contentPool) {
+      const contentEmbedding = await this.getContentEmbedding(content.id);
+      const similarity = this.cosineSimilarity(userEmbedding, contentEmbedding);
+
+      recommendations.push({
+        content,
+        score: similarity,
+        reasons: this.generateRecommendationReasons(similarity, content)
+      });
+    }
+
+    return recommendations
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topK);
+  }
+
+  async getUserEmbedding(userId) {
+    if (this.userProfiles.has(userId)) {
+      return this.userProfiles.get(userId);
+    }
+
+    // Generate initial user embedding from preferences
+    const initialEmbedding = await ai.embeddings({
+      input: "Default user preferences",
+      model: "text-embedding-3-large"
+    });
+
+    return initialEmbedding.data[0].embedding;
+  }
+
+  async getContentEmbedding(contentId) {
+    if (this.contentEmbeddings.has(contentId)) {
+      return this.contentEmbeddings.get(contentId);
+    }
+
+    // Generate content embedding
+    const content = await this.getContentById(contentId);
+    const embedding = await ai.embeddings({
+      input: `${content.title} ${content.description} ${content.tags.join(' ')}`,
+      model: "text-embedding-3-large"
+    });
+
+    this.contentEmbeddings.set(contentId, embedding.data[0].embedding);
+    return embedding.data[0].embedding;
+  }
+
+  getInteractionWeight(type) {
+    const weights = {
+      'view': 0.1,
+      'like': 0.3,
+      'share': 0.5,
+      'bookmark': 0.4,
+      'purchase': 0.8,
+      'review': 0.6
+    };
+    return weights[type] || 0.1;
+  }
+
+  updateUserEmbedding(userEmbedding, contentEmbedding, weight) {
+    return userEmbedding.map((value, index) =>
+      value * (1 - weight) + contentEmbedding[index] * weight
+    );
+  }
+
+  cosineSimilarity(a, b) {
+    const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+    const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+    const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+    return dotProduct / (magnitudeA * magnitudeB);
+  }
+}
+```
+
+## Pricing & Limits
+
+### Token Pricing
+- **Input Tokens**: $0.0001 per 1K tokens (text-embedding-3-small)
+- **Input Tokens**: $0.0002 per 1K tokens (text-embedding-3-large)
+
+### Rate Limits
+- **Requests per Minute**: 500
+- **Tokens per Minute**: 50,000
+- **Concurrent Requests**: 20
+
+### Usage Optimization
+
+```javascript
+// Monitor and optimize embedding usage
+class EmbeddingUsageOptimizer {
+  constructor() {
+    this.usageStats = {
+      totalRequests: 0,
+      totalTokens: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      averageLatency: 0
+    };
+  }
+
+  recordUsage(request, response, latency, cached = false) {
+    this.usageStats.totalRequests++;
+    this.usageStats.totalTokens += response.usage.total_tokens;
+    this.usageStats.averageLatency = (this.usageStats.averageLatency + latency) / 2;
+
+    if (cached) {
+      this.usageStats.cacheHits++;
+    } else {
+      this.usageStats.cacheMisses++;
+    }
+  }
+
+  getUsageStats() {
+    const cacheHitRate = this.usageStats.cacheHits / (this.usageStats.cacheHits + this.usageStats.cacheMisses);
+
+    return {
+      ...this.usageStats,
+      cacheHitRate,
+      costEstimate: this.calculateCost(this.usageStats.totalTokens)
+    };
+  }
+
+  calculateCost(tokens) {
+    // Average cost per token (mix of small and large models)
+    const averageCost = 0.00015;
+    return Math.round((tokens * averageCost) * 10000) / 10000;
+  }
+
+  getOptimizationSuggestions() {
+    const suggestions = [];
+
+    if (this.usageStats.cacheHitRate < 0.5) {
+      suggestions.push('Consider implementing better caching strategies');
+    }
+
+    if (this.usageStats.averageLatency > 1000) {
+      suggestions.push('Consider using smaller embedding models for faster responses');
+    }
+
+    if (this.usageStats.totalRequests > 10000) {
+      suggestions.push('Consider batch processing for high-volume requests');
+    }
+
+    return suggestions;
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title: "Chat API"
+    icon: "comments"
+    href: "/api-reference/chat/introduction"
+  >
+    Learn about conversation APIs
+  </Card>
+  <Card
+    title: "Batch Processing"
+    icon: "list"
+    href: "/guides/advanced/batch-processing"
+  >
+    Process embeddings in batches
+  </Card>
+  <Card
+    title: "Vector Databases"
+    icon: "database"
+    href: "/guides/integrations/vector-databases"
+  >
+    Store and search embeddings
+  </Card>
+  <Card
+    title: "Performance Guide"
+    icon: "bolt"
+    href: "/guides/advanced/optimization"
+  >
+    Optimize embedding performance
+  </Card>
+</CardGroup>

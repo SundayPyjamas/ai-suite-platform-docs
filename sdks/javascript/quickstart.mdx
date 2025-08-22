@@ -1,0 +1,451 @@
+---
+title: "JavaScript SDK Quick Start"
+description: "Get started with the SundayPyjamas AI Suite JavaScript SDK in minutes"
+---
+
+## Prerequisites
+
+Before starting, make sure you have:
+
+- **Node.js 18+** installed
+- **npm, yarn, or pnpm** package manager
+- **SundayPyjamas AI Suite account** and API key
+
+## Installation
+
+```bash
+# Install the SDK
+npm install @sundaypyjamas/ai-sdk
+
+# Or with yarn
+yarn add @sundaypyjamas/ai-sdk
+
+# Or with pnpm
+pnpm add @sundaypyjamas/ai-sdk
+```
+
+## Your First AI Request
+
+### 1. Set Up Your Environment
+
+Create a new file called `app.js`:
+
+```javascript
+// app.js
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+// Initialize the client
+const ai = new SundayPyjamasAI({
+  apiKey: 'spj_ai_your_api_key_here' // Replace with your actual API key
+});
+
+async function main() {
+  try {
+    // Make your first AI request
+    const response = await ai.chat({
+      messages: [
+        { role: 'user', content: 'Hello! Introduce yourself and tell me what you can help me with.' }
+      ],
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.7
+    });
+
+    // Print the response
+    console.log('AI Response:');
+    console.log(response.choices[0].message.content);
+
+    // Show usage information
+    console.log('\nUsage Information:');
+    console.log(`Prompt tokens: ${response.usage.prompt_tokens}`);
+    console.log(`Completion tokens: ${response.usage.completion_tokens}`);
+    console.log(`Total tokens: ${response.usage.total_tokens}`);
+
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
+}
+
+// Run the function
+main();
+```
+
+### 2. Run Your Code
+
+```bash
+node app.js
+```
+
+You should see output similar to:
+
+```
+AI Response:
+Hello! I'm an AI assistant powered by SundayPyjamas AI Suite. I can help you with a wide variety of tasks including:
+
+• Content creation and writing assistance
+• Code generation and debugging
+• Research and analysis
+• Problem-solving and brainstorming
+• Educational explanations
+• And much more!
+
+What would you like help with today?
+
+Usage Information:
+Prompt tokens: 25
+Completion tokens: 67
+Total tokens: 92
+```
+
+## Interactive Chat Example
+
+Let's create a more interactive chat application:
+
+```javascript
+// interactive-chat.js
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+import readline from 'readline';
+
+const ai = new SundayPyjamasAI({
+  apiKey: 'spj_ai_your_api_key_here' // Replace with your actual API key
+});
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+const conversation = [
+  {
+    role: 'system',
+    content: 'You are a helpful AI assistant. Keep your responses concise and engaging.'
+  }
+];
+
+function askQuestion() {
+  rl.question('\nYou: ', async (input) => {
+    if (input.toLowerCase() === 'exit' || input.toLowerCase() === 'quit') {
+      console.log('Goodbye! 👋');
+      rl.close();
+      return;
+    }
+
+    // Add user message to conversation
+    conversation.push({
+      role: 'user',
+      content: input
+    });
+
+    try {
+      console.log('\nAI: Thinking...');
+
+      const response = await ai.chat({
+        messages: conversation,
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.7,
+        max_tokens: 500
+      });
+
+      const aiMessage = response.choices[0].message.content;
+      console.log(`AI: ${aiMessage}`);
+
+      // Add AI response to conversation
+      conversation.push({
+        role: 'assistant',
+        content: aiMessage
+      });
+
+    } catch (error) {
+      console.error('Error:', error.message);
+    }
+
+    askQuestion(); // Continue the conversation
+  });
+}
+
+console.log('🤖 AI Chat Assistant');
+console.log('Type "exit" or "quit" to end the conversation\n');
+
+askQuestion();
+```
+
+### Run the Interactive Chat
+
+```bash
+node interactive-chat.js
+```
+
+## Streaming Responses
+
+Create a streaming chat example:
+
+```javascript
+// streaming-chat.js
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+const ai = new SundayPyjamasAI({
+  apiKey: 'spj_ai_your_api_key_here' // Replace with your actual API key
+});
+
+async function streamingChat() {
+  const messages = [
+    { role: 'user', content: 'Write a short story about a robot learning to paint.' }
+  ];
+
+  console.log('Streaming response:\n');
+
+  try {
+    const stream = ai.chatStream({
+      messages,
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.8,
+      max_tokens: 300
+    });
+
+    let fullResponse = '';
+    for await (const chunk of stream) {
+      if (chunk.choices[0].delta.content) {
+        process.stdout.write(chunk.choices[0].delta.content);
+        fullResponse += chunk.choices[0].delta.content;
+      }
+    }
+
+    console.log('\n\n--- Stream Complete ---');
+    console.log(`Total characters: ${fullResponse.length}`);
+
+  } catch (error) {
+    console.error('Streaming error:', error.message);
+  }
+}
+
+streamingChat();
+```
+
+### Run the Streaming Example
+
+```bash
+node streaming-chat.js
+```
+
+You'll see the response appear character by character as it's generated.
+
+## Different AI Models
+
+Try different models for different types of tasks:
+
+```javascript
+// model-comparison.js
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+const ai = new SundayPyjamasAI({
+  apiKey: 'spj_ai_your_api_key_here' // Replace with your actual API key
+});
+
+const models = [
+  {
+    id: 'llama-3.3-70b-versatile',
+    name: 'Versatile',
+    description: 'General purpose model good for most tasks'
+  },
+  {
+    id: 'llama-3.3-70b-code',
+    name: 'Code Assistant',
+    description: 'Specialized for programming and code generation'
+  },
+  {
+    id: 'llama-3.3-70b-creative',
+    name: 'Creative',
+    description: 'Optimized for creative writing and content generation'
+  }
+];
+
+const testPrompts = [
+  {
+    type: 'general',
+    prompt: 'Explain what machine learning is in simple terms.'
+  },
+  {
+    type: 'code',
+    prompt: 'Write a JavaScript function to reverse a string.'
+  },
+  {
+    type: 'creative',
+    prompt: 'Write the opening paragraph of a mystery novel.'
+  }
+];
+
+async function compareModels() {
+  for (const model of models) {
+    console.log(`\n🔹 Testing ${model.name} Model (${model.id})`);
+    console.log(`${model.description}`);
+    console.log('─'.repeat(50));
+
+    for (const test of testPrompts) {
+      try {
+        const response = await ai.chat({
+          messages: [{ role: 'user', content: test.prompt }],
+          model: model.id,
+          temperature: 0.7,
+          max_tokens: 150
+        });
+
+        console.log(`\n${test.type.toUpperCase()}: ${test.prompt}`);
+        console.log(`Response: ${response.choices[0].message.content.slice(0, 100)}...`);
+
+      } catch (error) {
+        console.log(`\n${test.type.toUpperCase()}: Error - ${error.message}`);
+      }
+    }
+
+    console.log('\n' + '='.repeat(60));
+  }
+}
+
+compareModels();
+```
+
+### Run the Model Comparison
+
+```bash
+node model-comparison.js
+```
+
+This will show you how different models handle the same prompts.
+
+## Error Handling
+
+Learn to handle common errors:
+
+```javascript
+// error-handling.js
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+const ai = new SundayPyjamasAI({
+  apiKey: 'spj_ai_your_api_key_here' // Replace with your actual API key
+});
+
+async function demonstrateErrorHandling() {
+  // Test 1: Invalid API Key
+  console.log('🧪 Test 1: Invalid API Key');
+  try {
+    const badAI = new SundayPyjamasAI({
+      apiKey: 'invalid_key'
+    });
+
+    await badAI.chat({
+      messages: [{ role: 'user', content: 'Hello!' }]
+    });
+  } catch (error) {
+    console.log(`Error caught: ${error.message}`);
+    console.log(`Error status: ${error.status}`);
+  }
+
+  // Test 2: Rate Limit
+  console.log('\n🧪 Test 2: Making many requests quickly');
+  const promises = Array(100).fill().map(() =>
+    ai.chat({
+      messages: [{ role: 'user', content: 'Hi' }]
+    })
+  );
+
+  try {
+    await Promise.all(promises);
+  } catch (error) {
+    console.log(`Rate limit error: ${error.message}`);
+  }
+
+  // Test 3: Network Error
+  console.log('\n🧪 Test 3: Network timeout');
+  const slowAI = new SundayPyjamasAI({
+    apiKey: 'spj_ai_your_api_key_here',
+    timeout: 1 // 1ms timeout
+  });
+
+  try {
+    await slowAI.chat({
+      messages: [{ role: 'user', content: 'This should timeout' }]
+    });
+  } catch (error) {
+    console.log(`Timeout error: ${error.message}`);
+  }
+
+  // Test 4: Proper error handling in application
+  console.log('\n🧪 Test 4: Robust error handling');
+  async function safeChat(message) {
+    try {
+      const response = await ai.chat({
+        messages: [{ role: 'user', content: message }],
+        model: 'llama-3.3-70b-versatile'
+      });
+
+      return response.choices[0].message.content;
+    } catch (error) {
+      // Log error details
+      console.error('Chat error:', {
+        message: error.message,
+        status: error.status,
+        code: error.code,
+        timestamp: new Date().toISOString()
+      });
+
+      // Return user-friendly message
+      if (error.status === 401) {
+        return 'Authentication failed. Please check your API key.';
+      } else if (error.status === 429) {
+        return 'Rate limit exceeded. Please wait and try again.';
+      } else if (error.code === 'NETWORK_ERROR') {
+        return 'Network error. Please check your internet connection.';
+      } else {
+        return 'An unexpected error occurred. Please try again.';
+      }
+    }
+  }
+
+  const result = await safeChat('Hello!');
+  console.log(`Safe chat result: ${result}`);
+}
+
+demonstrateErrorHandling();
+```
+
+### Run the Error Handling Example
+
+```bash
+node error-handling.js
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Installation Guide"
+    icon="download"
+    href="/sdks/javascript/installation"
+  >
+    Learn about installation options and configuration.
+  </Card>
+  <Card
+    title="Chat API Reference"
+    icon="comments"
+    href="/sdks/javascript/chat-api"
+  >
+    Explore all chat API methods and options.
+  </Card>
+  <Card
+    title="Streaming Guide"
+    icon="bolt"
+    href="/sdks/javascript/streaming"
+  >
+    Master real-time streaming responses.
+  </Card>
+  <Card
+    title="Code Examples"
+    icon="code"
+    href="/examples/javascript"
+  >
+    See more complete code examples.
+  </Card>
+</CardGroup>
+
+<Note>
+You've successfully made your first AI requests using the SundayPyjamas JavaScript SDK! These examples demonstrate the core concepts you'll need for building AI-powered applications. Experiment with different models, prompts, and parameters to see how they affect the responses.
+</Note>

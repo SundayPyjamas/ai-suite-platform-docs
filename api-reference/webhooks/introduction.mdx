@@ -1,0 +1,676 @@
+---
+title: "Webhooks Introduction"
+description: "Learn how to use webhooks to receive real-time notifications from SundayPyjamas AI Suite"
+---
+
+## Overview
+
+Webhooks allow you to receive real-time notifications when specific events occur in your SundayPyjamas AI Suite account. Instead of polling the API for updates, webhooks push data to your application as events happen.
+
+## How Webhooks Work
+
+1. **Register Webhook**: Configure a webhook URL in your dashboard
+2. **Event Occurs**: When an event happens (e.g., request completion, error)
+3. **Notification Sent**: We send an HTTP POST request to your webhook URL
+4. **Process Event**: Your application processes the webhook payload
+5. **Respond**: Return a 2xx status code to acknowledge receipt
+
+## Supported Events
+
+### Chat Completion Events
+
+#### `chat.request.completed`
+Triggered when a chat completion request is successfully processed.
+
+```json
+{
+  "id": "evt_1234567890",
+  "object": "event",
+  "type": "chat.request.completed",
+  "created": 1677832384,
+  "data": {
+    "request_id": "req_abc123def456",
+    "model": "llama-3.3-70b-versatile",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, world!"
+      }
+    ],
+    "response": {
+      "id": "chat_1234567890",
+      "object": "chat.completion",
+      "created": 1677832384,
+      "model": "llama-3.3-70b-versatile",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Hello! How can I help you today?"
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 13,
+        "completion_tokens": 8,
+        "total_tokens": 21
+      }
+    },
+    "metadata": {
+      "user_id": "user_123",
+      "session_id": "session_456",
+      "custom_data": {
+        "source": "web_app",
+        "feature": "chat_assistant"
+      }
+    }
+  }
+}
+```
+
+#### `chat.request.failed`
+Triggered when a chat completion request fails.
+
+```json
+{
+  "id": "evt_1234567891",
+  "object": "event",
+  "type": "chat.request.failed",
+  "created": 1677832384,
+  "data": {
+    "request_id": "req_abc123def456",
+    "error": {
+      "code": "rate_limit_exceeded",
+      "message": "Rate limit exceeded. Please try again later.",
+      "type": "rate_limit_error"
+    },
+    "retry_count": 2,
+    "metadata": {
+      "user_id": "user_123",
+      "session_id": "session_456"
+    }
+  }
+}
+```
+
+### Usage & Billing Events
+
+#### `usage.threshold.exceeded`
+Triggered when usage approaches or exceeds a threshold.
+
+```json
+{
+  "id": "evt_1234567892",
+  "object": "event",
+  "type": "usage.threshold.exceeded",
+  "created": 1677832384,
+  "data": {
+    "threshold": 100000,
+    "current_usage": 105000,
+    "period": "monthly",
+    "resource": "tokens",
+    "percentage": 105.0
+  }
+}
+```
+
+#### `billing.invoice.created`
+Triggered when a new invoice is created.
+
+```json
+{
+  "id": "evt_1234567893",
+  "object": "event",
+  "type": "billing.invoice.created",
+  "created": 1677832384,
+  "data": {
+    "invoice_id": "inv_1234567890",
+    "amount": 299.99,
+    "currency": "USD",
+    "period_start": 1677832384,
+    "period_end": 1677832384,
+    "status": "open",
+    "line_items": [
+      {
+        "description": "API Usage - 1M tokens",
+        "amount": 199.99,
+        "quantity": 1
+      },
+      {
+        "description": "Streaming requests",
+        "amount": 100.00,
+        "quantity": 50000
+      }
+    ]
+  }
+}
+```
+
+### Security Events
+
+#### `security.api_key.compromised`
+Triggered when suspicious API key usage is detected.
+
+```json
+{
+  "id": "evt_1234567894",
+  "object": "event",
+  "type": "security.api_key.compromised",
+  "created": 1677832384,
+  "data": {
+    "api_key_id": "key_1234567890",
+    "suspicious_activity": [
+      {
+        "timestamp": 1677832384,
+        "ip_address": "192.168.1.100",
+        "user_agent": "SuspiciousBot/1.0",
+        "request_count": 1000,
+        "time_window": 300
+      }
+    ],
+    "recommended_action": "rotate_api_key"
+  }
+}
+```
+
+## Setting Up Webhooks
+
+### 1. Create Webhook Endpoint
+
+Create an endpoint in your application to receive webhook events:
+
+```javascript
+// Next.js API route (app/api/webhooks/route.js)
+import { NextResponse } from 'next/server';
+
+export async function POST(request) {
+  try {
+    const payload = await request.json();
+    const signature = request.headers.get('x-sundaypyjamas-signature');
+
+    // Verify webhook signature
+    if (!verifySignature(payload, signature)) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    }
+
+    // Process the webhook event
+    await processWebhookEvent(payload);
+
+    return NextResponse.json({ received: true }, { status: 200 });
+  } catch (error) {
+    console.error('Webhook processing error:', error);
+    return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
+  }
+}
+```
+
+```python
+# FastAPI endpoint
+from fastapi import FastAPI, Request, HTTPException
+from pydantic import BaseModel
+import hmac
+import hashlib
+
+app = FastAPI()
+
+class WebhookPayload(BaseModel):
+    id: str
+    object: str
+    type: str
+    created: int
+    data: dict
+
+def verify_signature(payload: dict, signature: str, secret: str) -> bool:
+    expected_signature = hmac.new(
+        secret.encode(),
+        str(payload).encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(f"sha256={expected_signature}", signature)
+
+@app.post("/webhooks")
+async def handle_webhook(request: Request):
+    payload = await request.json()
+    signature = request.headers.get("x-sundaypyjamas-signature")
+
+    if not verify_signature(payload, signature, WEBHOOK_SECRET):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+
+    # Process webhook
+    await process_webhook_event(payload)
+
+    return {"received": True}
+```
+
+### 2. Configure Webhook in Dashboard
+
+1. **Navigate to Settings**: Go to your workspace settings
+2. **Webhooks Section**: Find the Webhooks tab
+3. **Add Webhook**: Click "Add Webhook"
+4. **Configure Settings**:
+   - **URL**: Your webhook endpoint URL
+   - **Events**: Select events to subscribe to
+   - **Secret**: Generate and copy the webhook secret
+   - **Status**: Enable the webhook
+
+### 3. Webhook Security
+
+#### Signature Verification
+
+Always verify webhook signatures to ensure authenticity:
+
+```javascript
+function verifySignature(payload, signature, secret) {
+  const expectedSignature = crypto
+    .createHmac('sha256', secret)
+    .update(JSON.stringify(payload))
+    .digest('hex');
+
+  const signatureHash = signature.replace('sha256=', '');
+
+  return crypto.timingSafeEqual(
+    Buffer.from(expectedSignature),
+    Buffer.from(signatureHash)
+  );
+}
+```
+
+```python
+def verify_signature(payload: dict, signature: str, secret: str) -> bool:
+    import hmac
+    import hashlib
+
+    expected_signature = hmac.new(
+        secret.encode(),
+        json.dumps(payload, sort_keys=True).encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+    signature_hash = signature.replace('sha256=', '')
+
+    return hmac.compare_digest(expected_signature, signature_hash)
+```
+
+#### Security Best Practices
+
+- **Use HTTPS**: Always use HTTPS for webhook endpoints
+- **Verify Signatures**: Never process webhooks without signature verification
+- **Use Webhook Secrets**: Rotate webhook secrets regularly
+- **Validate Payloads**: Validate webhook payload structure
+- **Handle Failures**: Implement proper error handling and logging
+
+## Webhook Event Processing
+
+### Event Deduplication
+
+Handle duplicate webhook events:
+
+```javascript
+class WebhookProcessor {
+  constructor() {
+    this.processedEvents = new Set();
+    this.eventExpiry = 24 * 60 * 60 * 1000; // 24 hours
+  }
+
+  async processEvent(event) {
+    const eventId = event.id;
+
+    // Check if event was already processed
+    if (this.processedEvents.has(eventId)) {
+      console.log(`Event ${eventId} already processed, skipping`);
+      return;
+    }
+
+    // Process the event
+    await this.handleEvent(event);
+
+    // Mark as processed
+    this.processedEvents.add(eventId);
+
+    // Clean up old events (simple implementation)
+    setTimeout(() => {
+      this.processedEvents.delete(eventId);
+    }, this.eventExpiry);
+  }
+
+  async handleEvent(event) {
+    switch (event.type) {
+      case 'chat.request.completed':
+        await this.handleChatCompletion(event.data);
+        break;
+      case 'chat.request.failed':
+        await this.handleChatFailure(event.data);
+        break;
+      case 'usage.threshold.exceeded':
+        await this.handleUsageThreshold(event.data);
+        break;
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+  }
+
+  async handleChatCompletion(data) {
+    // Update user's message count
+    // Send notification to user
+    // Log analytics data
+    console.log('Chat completion:', data.request_id);
+  }
+
+  async handleChatFailure(data) {
+    // Log error for analysis
+    // Send alert to developers
+    // Update error metrics
+    console.log('Chat failure:', data.request_id, data.error);
+  }
+
+  async handleUsageThreshold(data) {
+    // Send usage alert email
+    // Update billing dashboard
+    // Trigger usage optimization
+    console.log('Usage threshold exceeded:', data.percentage, '%');
+  }
+}
+```
+
+### Error Handling & Retry Logic
+
+```javascript
+class WebhookRetryHandler {
+  constructor(maxRetries = 5) {
+    this.maxRetries = maxRetries;
+    this.retryDelays = [1000, 5000, 15000, 60000, 300000]; // Progressive backoff
+  }
+
+  async processWithRetry(event, processor) {
+    let attempt = 0;
+
+    while (attempt < this.maxRetries) {
+      try {
+        await processor.processEvent(event);
+        return; // Success
+      } catch (error) {
+        attempt++;
+
+        if (attempt >= this.maxRetries) {
+          console.error(`Failed to process event ${event.id} after ${this.maxRetries} attempts`);
+          await this.handlePermanentFailure(event, error);
+          return;
+        }
+
+        const delay = this.retryDelays[attempt - 1] || 300000;
+        console.warn(`Attempt ${attempt} failed for event ${event.id}, retrying in ${delay}ms`);
+
+        await this.sleep(delay);
+      }
+    }
+  }
+
+  async handlePermanentFailure(event, error) {
+    // Log permanent failure
+    // Send alert to developers
+    // Store failed event for manual processing
+    console.error(`Permanent failure for event ${event.id}:`, error);
+
+    // Store in dead letter queue
+    await this.storeFailedEvent(event, error);
+  }
+
+  async storeFailedEvent(event, error) {
+    // Store in database or queue for manual processing
+    const failedEvent = {
+      event,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+      retryCount: this.maxRetries
+    };
+
+    // In a real application, store in database
+    console.log('Storing failed event:', failedEvent);
+  }
+
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+```
+
+## Webhook Management
+
+### Monitoring Webhook Health
+
+```javascript
+class WebhookMonitor {
+  constructor() {
+    this.healthChecks = new Map();
+    this.failureThreshold = 5;
+  }
+
+  recordDelivery(webhookId, success, responseTime, statusCode) {
+    const health = this.healthChecks.get(webhookId) || {
+      totalDeliveries: 0,
+      successfulDeliveries: 0,
+      failedDeliveries: 0,
+      averageResponseTime: 0,
+      lastFailure: null,
+      consecutiveFailures: 0
+    };
+
+    health.totalDeliveries++;
+
+    if (success) {
+      health.successfulDeliveries++;
+      health.consecutiveFailures = 0;
+    } else {
+      health.failedDeliveries++;
+      health.consecutiveFailures++;
+      health.lastFailure = new Date();
+    }
+
+    // Update average response time
+    health.averageResponseTime =
+      (health.averageResponseTime * (health.totalDeliveries - 1) + responseTime) / health.totalDeliveries;
+
+    this.healthChecks.set(webhookId, health);
+
+    // Check if webhook is unhealthy
+    if (health.consecutiveFailures >= this.failureThreshold) {
+      this.alertUnhealthyWebhook(webhookId, health);
+    }
+  }
+
+  getHealthStatus(webhookId) {
+    const health = this.healthChecks.get(webhookId);
+    if (!health) return null;
+
+    const successRate = health.successfulDeliveries / health.totalDeliveries;
+    const isHealthy = health.consecutiveFailures < this.failureThreshold;
+
+    return {
+      isHealthy,
+      successRate,
+      averageResponseTime: health.averageResponseTime,
+      totalDeliveries: health.totalDeliveries,
+      lastFailure: health.lastFailure
+    };
+  }
+
+  alertUnhealthyWebhook(webhookId, health) {
+    console.error(`Webhook ${webhookId} is unhealthy:`, {
+      consecutiveFailures: health.consecutiveFailures,
+      successRate: health.successfulDeliveries / health.totalDeliveries,
+      lastFailure: health.lastFailure
+    });
+
+    // Send alert to developers
+    // Disable webhook temporarily
+    // Send notification to webhook owner
+  }
+}
+```
+
+### Webhook Testing
+
+```javascript
+// Test webhook delivery
+class WebhookTester {
+  static async testWebhook(webhookUrl, testPayload) {
+    const startTime = Date.now();
+
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'SundayPyjamas-Webhook-Test'
+        },
+        body: JSON.stringify(testPayload),
+        timeout: 10000 // 10 second timeout
+      });
+
+      const responseTime = Date.now() - startTime;
+
+      return {
+        success: response.ok,
+        statusCode: response.status,
+        responseTime,
+        responseBody: await response.text()
+      };
+
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+
+      return {
+        success: false,
+        error: error.message,
+        responseTime
+      };
+    }
+  }
+
+  static createTestPayload(eventType = 'chat.request.completed') {
+    const testPayloads = {
+      'chat.request.completed': {
+        id: 'evt_test_123',
+        object: 'event',
+        type: 'chat.request.completed',
+        created: Math.floor(Date.now() / 1000),
+        data: {
+          request_id: 'req_test_123',
+          model: 'llama-3.3-70b-versatile',
+          response: {
+            id: 'chat_test_123',
+            choices: [{
+              message: {
+                role: 'assistant',
+                content: 'This is a test response from the webhook system.'
+              }
+            }]
+          }
+        }
+      }
+    };
+
+    return testPayloads[eventType] || testPayloads['chat.request.completed'];
+  }
+}
+```
+
+## Best Practices
+
+### Implementation Guidelines
+
+1. **Idempotency**: Ensure webhook processing is idempotent
+2. **Order Independence**: Handle events that may arrive out of order
+3. **Error Handling**: Implement comprehensive error handling
+4. **Logging**: Log all webhook events and processing attempts
+5. **Monitoring**: Monitor webhook health and delivery success rates
+
+### Security Considerations
+
+1. **Signature Verification**: Always verify webhook signatures
+2. **HTTPS Only**: Use HTTPS endpoints for all webhooks
+3. **Secret Management**: Store webhook secrets securely
+4. **IP Whitelisting**: Consider whitelisting our webhook IP addresses
+5. **Rate Limiting**: Implement rate limiting on webhook endpoints
+
+### Operational Considerations
+
+1. **Scalability**: Design webhook processing to handle high volumes
+2. **Reliability**: Implement retry logic and dead letter queues
+3. **Monitoring**: Set up comprehensive monitoring and alerting
+4. **Documentation**: Document webhook events and payload structures
+5. **Testing**: Test webhooks thoroughly before going to production
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title="Webhook Not Receiving Events">
+- Verify webhook URL is correct and accessible
+- Check if webhook is enabled in dashboard
+- Ensure endpoint returns 2xx status code
+- Check firewall and security settings
+</Accordion>
+
+<Accordion title="Invalid Signature Errors">
+- Verify webhook secret is correct
+- Check signature verification implementation
+- Ensure payload is being stringified consistently
+- Compare signature calculation with our documentation
+</Accordion>
+
+<Accordion title="Duplicate Events">
+- Implement event deduplication logic
+- Store processed event IDs with expiration
+- Handle events idempotently
+- Check for race conditions in processing
+</Accordion>
+
+<Accordion title="Slow Processing">
+- Optimize webhook endpoint performance
+- Implement asynchronous processing
+- Use background workers for heavy processing
+- Monitor and optimize database queries
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Chat API Reference"
+    icon="code"
+    href="/api-reference/chat/introduction"
+  >
+    Learn about the Chat API endpoints.
+  </Card>
+  <Card
+    title="Security Guide"
+    icon="shield-check"
+    href="/platform/security/webhooks"
+  >
+    Learn about webhook security best practices.
+  </Card>
+  <Card
+    title="Monitoring Setup"
+    icon="chart-line"
+    href="/platform/monitoring/datadog"
+  >
+    Set up monitoring for webhook health.
+  </Card>
+  <Card
+    title="Troubleshooting"
+    icon="triangle-exclamation"
+    href="/community/troubleshooting"
+  >
+    Find solutions to common webhook issues.
+  </Card>
+</CardGroup>
+
+<Note>
+Webhooks are a powerful way to integrate SundayPyjamas AI Suite with your applications in real-time. Proper implementation ensures reliable event delivery and seamless integration with your existing systems.
+</Note>

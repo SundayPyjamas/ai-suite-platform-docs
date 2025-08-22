@@ -17,8 +17,34 @@
             "group": "Getting Started",
             "pages": [
               "index",
-              "quickstart",
+              "guides/getting-started/quickstart",
+              "guides/getting-started/first-api-call",
+              "guides/getting-started/account-setup",
               "authentication"
+            ]
+          },
+          {
+            "group": "Guides & Tutorials",
+            "pages": [
+              "guides/tutorials/chat-application",
+              "guides/tutorials/content-generator",
+              "guides/tutorials/ai-assistant"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "guides/integrations/nextjs",
+              "guides/integrations/fastapi",
+              "guides/integrations/vercel"
+            ]
+          },
+          {
+            "group": "Advanced Features",
+            "pages": [
+              "guides/advanced/streaming-patterns",
+              "guides/advanced/batch-processing",
+              "guides/advanced/optimization"
             ]
           },
           {
@@ -54,6 +80,122 @@
             "pages": [
               "api-reference/chat/introduction",
               "api-reference/chat/post-chat"
+            ]
+          },
+          {
+            "group": "Models",
+            "pages": [
+              "api-reference/models/overview",
+              "api-reference/models/llama-3",
+              "api-reference/models/embedding-models"
+            ]
+          },
+          {
+            "group": "Webhooks & Events",
+            "pages": [
+              "api-reference/webhooks/introduction",
+              "api-reference/webhooks/events",
+              "api-reference/webhooks/security"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SDKs & Tools",
+        "groups": [
+          {
+            "group": "JavaScript SDK",
+            "pages": [
+              "sdks/javascript/installation",
+              "sdks/javascript/quickstart",
+              "sdks/javascript/chat-api",
+              "sdks/javascript/streaming",
+              "sdks/javascript/error-handling"
+            ]
+          },
+          {
+            "group": "Python SDK",
+            "pages": [
+              "sdks/python/installation",
+              "sdks/python/quickstart",
+              "sdks/python/chat-api",
+              "sdks/python/async-support",
+              "sdks/python/error-handling"
+            ]
+          },
+          {
+            "group": "Go SDK",
+            "pages": [
+              "sdks/go/installation",
+              "sdks/go/quickstart",
+              "sdks/go/chat-api",
+              "sdks/go/streaming",
+              "sdks/go/error-handling"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Platform & Deployment",
+        "groups": [
+          {
+            "group": "Deployment",
+            "pages": [
+              "platform/deployment/vercel",
+              "platform/deployment/aws",
+              "platform/deployment/docker",
+              "platform/deployment/kubernetes"
+            ]
+          },
+          {
+            "group": "Monitoring & Observability",
+            "pages": [
+              "platform/monitoring/datadog",
+              "platform/monitoring/new-relic",
+              "platform/monitoring/logging",
+              "platform/monitoring/alerts"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "platform/security/authentication",
+              "platform/security/encryption",
+              "platform/security/compliance",
+              "platform/security/best-practices"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Community & Resources",
+        "groups": [
+          {
+            "group": "Community Examples",
+            "pages": [
+              "community/examples/showcase",
+              "community/examples/contributing"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "community/changelog",
+              "community/troubleshooting",
+              "community/faq"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Enterprise",
+        "groups": [
+          {
+            "group": "Enterprise Features",
+            "pages": [
+              "enterprise/features",
+              "enterprise/sla",
+              "enterprise/support"
             ]
           }
         ]

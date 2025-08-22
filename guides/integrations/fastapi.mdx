@@ -1,0 +1,945 @@
+---
+title: "FastAPI Integration Guide"
+description: "Complete guide to integrating SundayPyjamas AI Suite with FastAPI applications"
+---
+
+## Overview
+
+This guide shows you how to integrate SundayPyjamas AI Suite into your FastAPI applications. You'll learn how to set up the Python SDK, implement async endpoints, handle streaming responses, and build scalable AI-powered APIs.
+
+## Prerequisites
+
+- Python 3.8+
+- FastAPI
+- Uvicorn (ASGI server)
+- SundayPyjamas AI Suite account and API key
+
+## Installation & Setup
+
+### 1. Install Dependencies
+
+```bash
+pip install fastapi uvicorn sundaypyjamas-ai
+# or
+poetry add fastapi uvicorn sundaypyjamas-ai
+# or
+conda install fastapi uvicorn sundaypyjamas-ai
+```
+
+### 2. Environment Configuration
+
+Create `.env` file:
+
+```env
+SUNDAYPYJAMAS_API_KEY=spj_ai_your_api_key_here
+```
+
+### 3. Project Structure
+
+```
+fastapi-ai-app/
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── config.py
+│   ├── dependencies.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── ai_service.py
+│   │   └── chat_service.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── schemas.py
+│   ├── routes/
+│   │   ├── __init__.py
+│   │   ├── chat.py
+│   │   ├── streaming.py
+│   │   └── health.py
+│   └── middleware/
+│       ├── __init__.py
+│       └── rate_limiter.py
+├── requirements.txt
+└── .env
+```
+
+## Basic Implementation
+
+### 1. Configuration
+
+Create `app/config.py`:
+
+```python
+from pydantic_settings import BaseSettings
+from typing import Optional
+
+class Settings(BaseSettings):
+    sundaypyjamas_api_key: str
+    app_name: str = "FastAPI AI App"
+    debug: bool = False
+    version: str = "1.0.0"
+    api_v1_prefix: str = "/api/v1"
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = False
+
+settings = Settings()
+```
+
+### 2. AI Service Layer
+
+Create `app/services/ai_service.py`:
+
+```python
+from sundaypyjamas_ai import SundayPyjamasAI
+from app.config import settings
+import asyncio
+from typing import List, Dict, Any, AsyncGenerator
+
+class AIService:
+    def __init__(self):
+        self.client = SundayPyjamasAI(api_key=settings.sundaypyjamas_api_key)
+
+    async def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        model: str = "llama-3.3-70b-versatile",
+        temperature: float = 0.7,
+        max_tokens: int = 1000,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Generate chat completion."""
+        try:
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.client.chat(
+                    messages=messages,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    **kwargs
+                )
+            )
+            return response
+        except Exception as e:
+            raise Exception(f"AI service error: {str(e)}")
+
+    async def chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        model: str = "llama-3.3-70b-versatile",
+        temperature: float = 0.7,
+        **kwargs
+    ) -> AsyncGenerator[str, None]:
+        """Stream chat completion."""
+        try:
+            stream = self.client.chat_stream(
+                messages=messages,
+                model=model,
+                temperature=temperature,
+                **kwargs
+            )
+
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+
+        except Exception as e:
+            yield f"Error: {str(e)}"
+```
+
+### 3. Data Models
+
+Create `app/models/schemas.py`:
+
+```python
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional
+from enum import Enum
+
+class MessageRole(str, Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+class ChatMessage(BaseModel):
+    role: MessageRole
+    content: str
+    metadata: Optional[Dict[str, Any]] = None
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+    model: Optional[str] = "llama-3.3-70b-versatile"
+    temperature: Optional[float] = Field(0.7, ge=0, le=2)
+    max_tokens: Optional[int] = Field(1000, ge=1, le=4000)
+    stream: Optional[bool] = False
+    user_id: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    id: str
+    object: str = "chat.completion"
+    created: int
+    model: str
+    choices: List[Dict[str, Any]]
+    usage: Dict[str, int]
+
+class StreamChunk(BaseModel):
+    id: Optional[str] = None
+    object: str = "chat.completion.chunk"
+    created: int
+    model: str
+    choices: List[Dict[str, Any]]
+
+class ErrorResponse(BaseModel):
+    error: str
+    message: str
+    timestamp: str
+```
+
+### 4. Dependencies
+
+Create `app/dependencies.py`:
+
+```python
+from fastapi import Depends, HTTPException, status
+from app.services.ai_service import AIService
+from app.config import settings
+
+def get_ai_service() -> AIService:
+    """Dependency to get AI service instance."""
+    return AIService()
+
+def verify_api_key(api_key: str = None) -> bool:
+    """Verify API key (implement your own logic)."""
+    if not api_key:
+        return False
+    # Add your API key verification logic here
+    return api_key == settings.sundaypyjamas_api_key
+
+def get_verified_api_key(api_key: str = None) -> str:
+    """Dependency to verify API key."""
+    if not verify_api_key(api_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key"
+        )
+    return api_key
+```
+
+### 5. Chat Routes
+
+Create `app/routes/chat.py`:
+
+```python
+from fastapi import APIRouter, Depends, HTTPException
+from app.services.ai_service import AIService
+from app.models.schemas import ChatRequest, ChatResponse, ErrorResponse
+from app.dependencies import get_ai_service, get_verified_api_key
+import time
+import logging
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat_completion(
+    request: ChatRequest,
+    ai_service: AIService = Depends(get_ai_service),
+    api_key: str = Depends(get_verified_api_key)
+):
+    """Generate chat completion."""
+    try:
+        start_time = time.time()
+
+        # Convert Pydantic models to dicts
+        messages = [
+            {"role": msg.role.value, "content": msg.content}
+            for msg in request.messages
+        ]
+
+        response = await ai_service.chat_completion(
+            messages=messages,
+            model=request.model,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens
+        )
+
+        duration = time.time() - start_time
+        logger.info(".2f")
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Chat completion error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorResponse(
+                error="chat_completion_failed",
+                message=str(e),
+                timestamp=time.time()
+            ).dict()
+        )
+```
+
+### 6. Main Application
+
+Create `app/main.py`:
+
+```python
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import logging
+from app.config import settings
+from app.routes import chat, streaming, health
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Create FastAPI app
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.version,
+    description="AI-powered API using SundayPyjamas AI Suite"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+
+    logger.info(".2f")
+
+    return response
+
+# Include routers
+app.include_router(
+    chat.router,
+    prefix=settings.api_v1_prefix,
+    tags=["chat"]
+)
+app.include_router(
+    streaming.router,
+    prefix=settings.api_v1_prefix,
+    tags=["streaming"]
+)
+app.include_router(
+    health.router,
+    prefix=settings.api_v1_prefix,
+    tags=["health"]
+)
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global exception: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_server_error",
+            "message": "An unexpected error occurred",
+            "timestamp": time.time()
+        }
+    )
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.debug
+    )
+```
+
+## Advanced Features
+
+### 1. Streaming Responses
+
+Create `app/routes/streaming.py`:
+
+```python
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
+from app.services.ai_service import AIService
+from app.models.schemas import ChatRequest, StreamChunk
+from app.dependencies import get_ai_service, get_verified_api_key
+import json
+import time
+
+router = APIRouter()
+
+@router.post("/chat/stream")
+async def chat_stream(
+    request: ChatRequest,
+    ai_service: AIService = Depends(get_ai_service),
+    api_key: str = Depends(get_verified_api_key)
+):
+    """Stream chat completion."""
+    messages = [
+        {"role": msg.role.value, "content": msg.content}
+        for msg in request.messages
+    ]
+
+    async def generate_stream():
+        try:
+            async for chunk in ai_service.chat_stream(
+                messages=messages,
+                model=request.model,
+                temperature=request.temperature
+            ):
+                stream_chunk = StreamChunk(
+                    id=f"chat_{int(time.time())}",
+                    created=int(time.time()),
+                    model=request.model,
+                    choices=[{
+                        "index": 0,
+                        "delta": {"content": chunk},
+                        "finish_reason": None
+                    }]
+                )
+                yield f"data: {json.dumps(stream_chunk.dict())}\n\n"
+
+            # Send final chunk
+            final_chunk = StreamChunk(
+                created=int(time.time()),
+                model=request.model,
+                choices=[{
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": "stop"
+                }]
+            )
+            yield f"data: {json.dumps(final_chunk.dict())}\n\n"
+            yield "data: [DONE]\n\n"
+
+        except Exception as e:
+            error_chunk = {
+                "error": str(e),
+                "timestamp": time.time()
+            }
+            yield f"data: {json.dumps(error_chunk)}\n\n"
+
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+```
+
+### 2. Rate Limiting Middleware
+
+Create `app/middleware/rate_limiter.py`:
+
+```python
+from fastapi import Request, HTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
+from collections import defaultdict
+import time
+
+class RateLimiter(BaseHTTPMiddleware):
+    def __init__(self, app, requests_per_minute: int = 60):
+        super().__init__(app)
+        self.requests_per_minute = requests_per_minute
+        self.requests = defaultdict(list)
+
+    async def dispatch(self, request: Request, call_next):
+        client_ip = request.client.host
+        current_time = time.time()
+
+        # Clean old requests
+        self.requests[client_ip] = [
+            req_time for req_time in self.requests[client_ip]
+            if current_time - req_time < 60
+        ]
+
+        # Check rate limit
+        if len(self.requests[client_ip]) >= self.requests_per_minute:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many requests"
+            )
+
+        # Add current request
+        self.requests[client_ip].append(current_time)
+
+        response = await call_next(request)
+        return response
+```
+
+Update `main.py` to use the middleware:
+
+```python
+from app.middleware.rate_limiter import RateLimiter
+
+# Add rate limiting middleware
+app.add_middleware(RateLimiter, requests_per_minute=60)
+```
+
+### 3. Caching Layer
+
+Create `app/services/cache_service.py`:
+
+```python
+import redis.asyncio as redis
+import json
+from typing import Optional, Dict, Any
+import hashlib
+
+class CacheService:
+    def __init__(self, redis_url: str = "redis://localhost:6379"):
+        self.redis = redis.from_url(redis_url)
+
+    def _generate_key(self, messages: list, **kwargs) -> str:
+        """Generate cache key from messages and parameters."""
+        content = json.dumps({
+            "messages": messages,
+            **kwargs
+        })
+        return f"ai_cache:{hashlib.md5(content.encode()).hexdigest()}"
+
+    async def get_cached_response(self, messages: list, **kwargs) -> Optional[Dict[str, Any]]:
+        """Get cached response if available."""
+        key = self._generate_key(messages, **kwargs)
+        cached = await self.redis.get(key)
+        return json.loads(cached) if cached else None
+
+    async def set_cached_response(
+        self,
+        messages: list,
+        response: Dict[str, Any],
+        ttl: int = 300,
+        **kwargs
+    ):
+        """Cache response with TTL."""
+        key = self._generate_key(messages, **kwargs)
+        await self.redis.setex(key, ttl, json.dumps(response))
+
+    async def clear_cache(self):
+        """Clear all cached responses."""
+        keys = await self.redis.keys("ai_cache:*")
+        if keys:
+            await self.redis.delete(*keys)
+```
+
+Update `ai_service.py` to use caching:
+
+```python
+from app.services.cache_service import CacheService
+
+class AIService:
+    def __init__(self):
+        self.client = SundayPyjamasAI(api_key=settings.sundaypyjamas_api_key)
+        self.cache = CacheService()
+
+    async def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
+        # Check cache first
+        cached = await self.cache.get_cached_response(messages, **kwargs)
+        if cached:
+            return cached
+
+        # Generate response
+        response = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: self.client.chat(messages=messages, **kwargs)
+        )
+
+        # Cache response
+        await self.cache.set_cached_response(messages, response, **kwargs)
+
+        return response
+```
+
+### 4. Async Chat Service
+
+Create `app/services/chat_service.py`:
+
+```python
+from typing import List, Dict, Any
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from app.services.ai_service import AIService
+from app.services.cache_service import CacheService
+
+class ChatService:
+    def __init__(self):
+        self.ai_service = AIService()
+        self.cache_service = CacheService()
+        self.executor = ThreadPoolExecutor(max_workers=4)
+
+    async def process_chat_request(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process chat request with optimizations."""
+        messages = request_data.pop("messages", [])
+        user_id = request_data.pop("user_id", None)
+
+        # Check cache
+        cached = await self.cache_service.get_cached_response(messages, **request_data)
+        if cached:
+            return cached
+
+        # Process in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            self.executor,
+            lambda: self.ai_service.client.chat(
+                messages=messages,
+                **request_data
+            )
+        )
+
+        # Cache response
+        await self.cache_service.set_cached_response(
+            messages,
+            response,
+            user_id=user_id,
+            **request_data
+        )
+
+        return response
+
+    async def batch_process_requests(
+        self,
+        requests: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Process multiple chat requests in parallel."""
+        tasks = [
+            self.process_chat_request(req)
+            for req in requests
+        ]
+        return await asyncio.gather(*tasks)
+```
+
+## Production Deployment
+
+### 1. Docker Configuration
+
+Create `Dockerfile`:
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create non-root user
+RUN adduser --disabled-password --gecos '' appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Start application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+```
+
+Create `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  fastapi-app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - SUNDAYPYJAMAS_API_KEY=${SUNDAYPYJAMAS_API_KEY}
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+```
+
+### 2. Production Configuration
+
+Create `app/config/production.py`:
+
+```python
+from app.config import Settings
+
+class ProductionSettings(Settings):
+    debug: bool = False
+    api_v1_prefix: str = "/api/v1"
+
+    class Config:
+        env_file = ".env.production"
+```
+
+### 3. Monitoring & Logging
+
+Create `app/services/monitoring.py`:
+
+```python
+import time
+from typing import Dict, Any
+import logging
+from contextvars import ContextVar
+
+# Request context
+request_id: ContextVar[str] = ContextVar('request_id')
+
+class MonitoringService:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
+    async def log_request(
+        self,
+        endpoint: str,
+        method: str,
+        duration: float,
+        status_code: int,
+        user_id: str = None,
+        **kwargs
+    ):
+        """Log API request metrics."""
+        log_data = {
+            "timestamp": time.time(),
+            "request_id": request_id.get(None),
+            "endpoint": endpoint,
+            "method": method,
+            "duration": duration,
+            "status_code": status_code,
+            "user_id": user_id,
+            **kwargs
+        }
+
+        self.logger.info("API Request", extra=log_data)
+
+        # Send to monitoring service (e.g., DataDog, New Relic)
+        # await self.send_to_monitoring_service(log_data)
+
+    async def log_error(
+        self,
+        error: Exception,
+        context: Dict[str, Any] = None
+    ):
+        """Log application errors."""
+        log_data = {
+            "timestamp": time.time(),
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+            "request_id": request_id.get(None),
+            **(context or {})
+        }
+
+        self.logger.error("Application Error", extra=log_data)
+```
+
+## Testing
+
+### 1. Unit Tests
+
+Create `tests/test_chat.py`:
+
+```python
+import pytest
+from fastapi.testclient import TestClient
+from app.main import app
+
+client = TestClient(app)
+
+def test_chat_completion():
+    response = client.post(
+        "/api/v1/chat",
+        json={
+            "messages": [
+                {"role": "user", "content": "Hello!"}
+            ]
+        },
+        headers={"Authorization": "Bearer test_key"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "choices" in data
+    assert len(data["choices"]) > 0
+
+def test_streaming_chat():
+    response = client.post(
+        "/api/v1/chat/stream",
+        json={
+            "messages": [
+                {"role": "user", "content": "Hello!"}
+            ],
+            "stream": True
+        },
+        headers={"Authorization": "Bearer test_key"}
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/plain; charset=utf-8"
+```
+
+### 2. Load Testing
+
+Create `tests/load_test.py`:
+
+```python
+import asyncio
+import aiohttp
+import time
+
+async def load_test_chat_endpoint():
+    """Load test the chat endpoint."""
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        for i in range(100):  # 100 concurrent requests
+            tasks.append(make_chat_request(session, i))
+
+        start_time = time.time()
+        results = await asyncio.gather(*tasks)
+        end_time = time.time()
+
+        print(f"Completed {len(results)} requests in {end_time - start_time:.2f} seconds")
+
+async def make_chat_request(session, request_id):
+    payload = {
+        "messages": [{"role": "user", "content": f"Hello from request {request_id}"}]
+    }
+
+    async with session.post(
+        "http://localhost:8000/api/v1/chat",
+        json=payload,
+        headers={"Authorization": "Bearer test_key"}
+    ) as response:
+        return await response.json()
+
+if __name__ == "__main__":
+    asyncio.run(load_test_chat_endpoint())
+```
+
+## Best Practices
+
+### Performance Optimization
+- Use connection pooling for external API calls
+- Implement proper caching strategies
+- Use async/await for I/O operations
+- Optimize database queries
+- Use background tasks for heavy operations
+
+### Security
+- Validate and sanitize all inputs
+- Implement proper authentication and authorization
+- Use HTTPS in production
+- Implement rate limiting
+- Log security events
+
+### Error Handling
+- Implement comprehensive error handling
+- Provide meaningful error messages
+- Log errors with sufficient context
+- Implement graceful degradation
+
+### Monitoring
+- Monitor API performance and latency
+- Track error rates and types
+- Monitor resource usage
+- Set up alerts for critical issues
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title="Import Errors">
+- Check Python path and virtual environment
+- Verify all dependencies are installed
+- Check import statements and file paths
+- Ensure proper package structure
+</Accordion>
+
+<Accordion title="Async/Await Issues">
+- Verify Python 3.7+ for async support
+- Check for proper async/await usage
+- Ensure event loop is not blocked
+- Use proper async libraries
+</Accordion>
+
+<Accordion title="Streaming Problems">
+- Check server-sent events implementation
+- Verify client-side event handling
+- Check network connectivity
+- Monitor memory usage during streaming
+</Accordion>
+
+<Accordion title="Performance Issues">
+- Profile application performance
+- Check database query optimization
+- Monitor memory and CPU usage
+- Implement proper caching
+- Use async database drivers
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Next.js Integration"
+    icon="code"
+    href="/guides/integrations/nextjs"
+  >
+    Learn how to integrate with Next.js frontend applications.
+  </Card>
+  <Card
+    title="Vercel Deployment"
+    icon="cloud"
+    href="/platform/deployment/vercel"
+  >
+    Deploy your FastAPI app to Vercel.
+  </Card>
+  <Card
+    title="Advanced Streaming"
+    icon="bolt"
+    href="/guides/advanced/streaming-patterns"
+  >
+    Master advanced streaming techniques in FastAPI.
+  </Card>
+  <Card
+    title="Monitoring Setup"
+    icon="gauge-high"
+    href="/platform/monitoring/datadog"
+  >
+    Set up comprehensive monitoring for your FastAPI application.
+  </Card>
+</CardGroup>
+
+<Note>
+FastAPI provides an excellent foundation for building high-performance AI APIs with SundayPyjamas AI Suite. Its async capabilities, automatic documentation generation, and type safety make it ideal for scalable AI applications.
+</Note>

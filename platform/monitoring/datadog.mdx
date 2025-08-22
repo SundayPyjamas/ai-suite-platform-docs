@@ -1,0 +1,902 @@
+---
+title: "Datadog Monitoring"
+description: "Set up comprehensive monitoring for your SundayPyjamas AI Suite applications using Datadog"
+---
+
+## Overview
+
+Datadog provides comprehensive monitoring, logging, and alerting capabilities for AI applications. This guide covers setting up monitoring for your SundayPyjamas AI Suite integration.
+
+## Prerequisites
+
+- Datadog account
+- SundayPyjamas AI Suite application
+- Datadog API key and Application key
+
+## Installation
+
+### 1. Install Datadog Agent
+
+```bash
+# Ubuntu/Debian
+DD_API_KEY=your_api_key bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
+
+# Docker
+docker run -d --name datadog-agent \
+  -e DD_API_KEY=your_api_key \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v /proc/:/host/proc/:ro \
+  -v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
+  datadog/agent:latest
+```
+
+### 2. Install SDK
+
+```bash
+npm install dd-trace @datadog/datadog-api-client
+# or
+yarn add dd-trace @datadog/datadog-api-client
+```
+
+### 3. Configure APM
+
+```javascript
+// server.js or app.js
+const tracer = require('dd-trace').init({
+  service: 'sundaypyjamas-ai-app',
+  env: process.env.NODE_ENV,
+  version: '1.0.0',
+  logInjection: true
+});
+
+// Initialize with your Datadog credentials
+const configuration = {
+  authMethods: {
+    apiKeyAuth: process.env.DATADOG_API_KEY,
+    appKeyAuth: process.env.DATADOG_APP_KEY
+  }
+};
+```
+
+## Application Monitoring
+
+### 1. AI Request Tracking
+
+```javascript
+// lib/datadog.js
+import tracer from 'dd-trace';
+
+export class AIDatadogTracker {
+  static trackAIRequest(span, request, response, error = null) {
+    span.setTag('ai.model', request.model || 'unknown');
+    span.setTag('ai.endpoint', '/chat');
+    span.setTag('ai.user_id', request.userId || 'anonymous');
+    span.setTag('ai.session_id', request.sessionId || 'unknown');
+
+    if (response?.usage) {
+      span.setTag('ai.prompt_tokens', response.usage.prompt_tokens);
+      span.setTag('ai.completion_tokens', response.usage.completion_tokens);
+      span.setTag('ai.total_tokens', response.usage.total_tokens);
+    }
+
+    if (error) {
+      span.setTag('error', true);
+      span.setTag('error.type', error.name);
+      span.setTag('error.message', error.message);
+      span.setTag('error.status', error.status);
+    }
+
+    span.finish();
+  }
+
+  static createAISpan(operation) {
+    return tracer.startSpan(`ai.${operation}`);
+  }
+}
+
+// Usage in AI service
+import { AIDatadogTracker } from './datadog';
+
+export class AIService {
+  async chat(request) {
+    const span = AIDatadogTracker.createAISpan('chat');
+    let response, error;
+
+    try {
+      span.setTag('ai.messages_count', request.messages.length);
+      span.setTag('ai.request_size', JSON.stringify(request).length);
+
+      response = await this.makeAPIRequest(request);
+
+      span.setTag('ai.response_size', JSON.stringify(response).length);
+      span.setTag('ai.processing_time', Date.now() - span._startTime);
+
+    } catch (err) {
+      error = err;
+    } finally {
+      AIDatadogTracker.trackAIRequest(span, request, response, error);
+    }
+
+    if (error) throw error;
+    return response;
+  }
+}
+```
+
+### 2. Performance Metrics
+
+```javascript
+// lib/metrics.js
+import { MetricsApi } from '@datadog/datadog-api-client';
+
+export class AIMetricsCollector {
+  constructor() {
+    this.metricsApi = new MetricsApi(configuration);
+    this.metrics = [];
+  }
+
+  recordAIMetric(name, value, tags = {}) {
+    const metric = {
+      metric: name,
+      type: 'gauge',
+      points: [{
+        timestamp: Math.floor(Date.now() / 1000),
+        value: value
+      }],
+      tags: Object.entries(tags).map(([key, value]) => `${key}:${value}`)
+    };
+
+    this.metrics.push(metric);
+
+    // Send metrics in batches
+    if (this.metrics.length >= 10) {
+      this.flushMetrics();
+    }
+  }
+
+  async flushMetrics() {
+    if (this.metrics.length === 0) return;
+
+    try {
+      await this.metricsApi.submitMetrics({
+        body: {
+          series: this.metrics
+        }
+      });
+      this.metrics = [];
+    } catch (error) {
+      console.error('Failed to send metrics to Datadog:', error);
+    }
+  }
+
+  // Predefined AI metrics
+  recordTokenUsage(promptTokens, completionTokens, model) {
+    this.recordAIMetric('ai.tokens.prompt', promptTokens, { model });
+    this.recordAIMetric('ai.tokens.completion', completionTokens, { model });
+    this.recordAIMetric('ai.tokens.total', promptTokens + completionTokens, { model });
+  }
+
+  recordResponseTime(duration, model, endpoint) {
+    this.recordAIMetric('ai.response_time', duration, { model, endpoint });
+  }
+
+  recordErrorRate(error, model, endpoint) {
+    this.recordAIMetric('ai.error_rate', error ? 1 : 0, { model, endpoint });
+  }
+
+  recordCacheHit(isHit, model) {
+    this.recordAIMetric('ai.cache.hit', isHit ? 1 : 0, { model });
+    this.recordAIMetric('ai.cache.miss', isHit ? 0 : 1, { model });
+  }
+}
+
+// Usage
+const metrics = new AIMetricsCollector();
+
+const response = await ai.chat(request);
+metrics.recordTokenUsage(
+  response.usage.prompt_tokens,
+  response.usage.completion_tokens,
+  request.model
+);
+```
+
+## Logging Integration
+
+### 1. Structured Logging
+
+```javascript
+// lib/logger.js
+import tracer from 'dd-trace';
+
+export class AIDatadogLogger {
+  static log(level, message, context = {}) {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      service: 'sundaypyjamas-ai-app',
+      level,
+      message,
+      context,
+      trace_id: tracer.currentSpan()?.context().toTraceId(),
+      span_id: tracer.currentSpan()?.context().toSpanId()
+    };
+
+    // Log to console (Datadog agent will pick it up)
+    console.log(JSON.stringify(logEntry));
+  }
+
+  static info(message, context) {
+    this.log('info', message, context);
+  }
+
+  static warn(message, context) {
+    this.log('warn', message, context);
+  }
+
+  static error(message, context) {
+    this.log('error', message, context);
+  }
+
+  // AI-specific logging methods
+  static logAIRequest(request, response = null, error = null) {
+    const context = {
+      ai: {
+        model: request.model,
+        messages_count: request.messages?.length,
+        user_id: request.userId,
+        session_id: request.sessionId
+      },
+      response: response ? {
+        tokens: response.usage,
+        choices_count: response.choices?.length
+      } : null,
+      error: error ? {
+        name: error.name,
+        message: error.message,
+        status: error.status
+      } : null
+    };
+
+    const level = error ? 'error' : 'info';
+    const message = error ? 'AI request failed' : 'AI request completed';
+
+    this.log(level, message, context);
+  }
+
+  static logStreamingEvent(event, context) {
+    this.info(`Streaming ${event}`, {
+      streaming: context,
+      event
+    });
+  }
+}
+
+// Usage
+import { AIDatadogLogger } from './logger';
+
+try {
+  const response = await ai.chat(request);
+  AIDatadogLogger.logAIRequest(request, response);
+} catch (error) {
+  AIDatadogLogger.logAIRequest(request, null, error);
+}
+```
+
+### 2. Error Tracking
+
+```javascript
+// lib/error-tracker.js
+import { AIDatadogLogger } from './logger';
+
+export class AIErrorTracker {
+  constructor() {
+    this.errorCounts = new Map();
+    this.errorHistory = [];
+    this.maxHistorySize = 1000;
+  }
+
+  trackError(error, context = {}) {
+    const errorKey = `${error.name}:${error.code || 'unknown'}`;
+    const count = this.errorCounts.get(errorKey) || 0;
+    this.errorCounts.set(errorKey, count + 1);
+
+    const errorEntry = {
+      timestamp: Date.now(),
+      error: {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        stack: error.stack
+      },
+      context,
+      count: this.errorCounts.get(errorKey)
+    };
+
+    this.errorHistory.push(errorEntry);
+
+    if (this.errorHistory.length > this.maxHistorySize) {
+      this.errorHistory.shift();
+    }
+
+    // Log to Datadog
+    AIDatadogLogger.error('AI Error Tracked', {
+      error: errorEntry.error,
+      context,
+      error_count: errorEntry.count
+    });
+  }
+
+  getErrorStats() {
+    const totalErrors = this.errorHistory.length;
+    const errorRate = totalErrors / (Date.now() / 1000); // errors per second
+
+    return {
+      totalErrors,
+      errorRate,
+      errorCounts: Object.fromEntries(this.errorCounts),
+      recentErrors: this.errorHistory.slice(-10),
+      topErrors: Array.from(this.errorCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+    };
+  }
+
+  getErrorRate(timeWindowMs = 3600000) { // 1 hour
+    const windowStart = Date.now() - timeWindowMs;
+    const recentErrors = this.errorHistory.filter(
+      entry => entry.timestamp > windowStart
+    );
+
+    return recentErrors.length / (timeWindowMs / 1000);
+  }
+}
+
+// Usage
+const errorTracker = new AIErrorTracker();
+
+try {
+  await ai.chat(request);
+} catch (error) {
+  errorTracker.trackError(error, {
+    userId: request.userId,
+    model: request.model,
+    endpoint: '/chat'
+  });
+}
+```
+
+## Custom Dashboards
+
+### 1. AI Performance Dashboard
+
+```javascript
+// Create dashboard via API
+import { DashboardsApi } from '@datadog/datadog-api-client';
+
+export class AIDashboardCreator {
+  constructor() {
+    this.dashboardsApi = new DashboardsApi(configuration);
+  }
+
+  async createAIDashboard() {
+    const dashboard = {
+      title: 'AI Application Performance',
+      description: 'Monitor AI application metrics and performance',
+      widgets: [
+        // AI Request Rate
+        {
+          definition: {
+            type: 'query_value',
+            requests: [{
+              q: 'sum:ai.requests.count{*}.as_rate()',
+              aggregator: 'avg'
+            }],
+            title: 'AI Requests/sec'
+          }
+        },
+
+        // Token Usage
+        {
+          definition: {
+            type: 'timeseries',
+            requests: [
+              {
+                q: 'sum:ai.tokens.prompt{*}.as_count()',
+                display_type: 'line',
+                style: { palette: 'dog_classic', line_type: 'solid' }
+              },
+              {
+                q: 'sum:ai.tokens.completion{*}.as_count()',
+                display_type: 'line',
+                style: { palette: 'dog_classic', line_type: 'dashed' }
+              }
+            ],
+            title: 'Token Usage Over Time'
+          }
+        },
+
+        // Error Rate
+        {
+          definition: {
+            type: 'query_value',
+            requests: [{
+              q: 'sum:ai.error_rate{*}.as_rate()',
+              aggregator: 'avg'
+            }],
+            title: 'AI Error Rate'
+          }
+        },
+
+        // Response Time
+        {
+          definition: {
+            type: 'timeseries',
+            requests: [{
+              q: 'avg:ai.response_time{*}',
+              display_type: 'line'
+            }],
+            title: 'AI Response Time'
+          }
+        },
+
+        // Cache Performance
+        {
+          definition: {
+            type: 'query_value',
+            requests: [{
+              q: 'sum:ai.cache.hit{*}/(sum:ai.cache.hit{*}+sum:ai.cache.miss{*})',
+              aggregator: 'avg'
+            }],
+            title: 'Cache Hit Rate'
+          }
+        },
+
+        // Model Usage
+        {
+          definition: {
+            type: 'toplist',
+            requests: [{
+              q: 'top(sum:ai.requests.count{*} by {model}, 10, "mean", "desc")'
+            }],
+            title: 'Most Used Models'
+          }
+        }
+      ],
+      layout_type: 'ordered',
+      notify_list: []
+    };
+
+    try {
+      const response = await this.dashboardsApi.createDashboard({ body: dashboard });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to create dashboard:', error);
+      throw error;
+    }
+  }
+}
+```
+
+### 2. Error Monitoring Dashboard
+
+```javascript
+export class ErrorDashboardCreator {
+  async createErrorDashboard() {
+    const dashboard = {
+      title: 'AI Application Errors',
+      description: 'Monitor AI application errors and issues',
+      widgets: [
+        // Error Rate Over Time
+        {
+          definition: {
+            type: 'timeseries',
+            requests: [{
+              q: 'sum:ai.error_rate{*}.as_rate()',
+              display_type: 'line'
+            }],
+            title: 'Error Rate Over Time'
+          }
+        },
+
+        // Top Error Types
+        {
+          definition: {
+            type: 'toplist',
+            requests: [{
+              q: 'top(sum:ai.error.count{*} by {error_type}, 10, "mean", "desc")'
+            }],
+            title: 'Top Error Types'
+          }
+        },
+
+        // Error Distribution by Model
+        {
+          definition: {
+            type: 'pie',
+            requests: [{
+              q: 'sum:ai.error.count{*} by {model}'
+            }],
+            title: 'Errors by Model'
+          }
+        },
+
+        // Response Time vs Errors
+        {
+          definition: {
+            type: 'scatterplot',
+            requests: [
+              {
+                x: { q: 'avg:ai.response_time{*}' },
+                y: { q: 'sum:ai.error_rate{*}' }
+              }
+            ],
+            title: 'Response Time vs Error Rate'
+          }
+        }
+      ],
+      layout_type: 'ordered'
+    };
+
+    const response = await this.dashboardsApi.createDashboard({ body: dashboard });
+    return response.data;
+  }
+}
+```
+
+## Alerting
+
+### 1. AI-Specific Alerts
+
+```javascript
+// lib/alerts.js
+import { MonitorsApi } from '@datadog/datadog-api-client';
+
+export class AIAlertCreator {
+  constructor() {
+    this.monitorsApi = new MonitorsApi(configuration);
+  }
+
+  async createHighErrorRateAlert() {
+    const monitor = {
+      name: 'AI High Error Rate',
+      type: 'query alert',
+      query: 'sum(last_5m):sum:ai.error_rate{*}.as_rate() > 0.05',
+      message: `
+        High AI error rate detected: {{value}}%
+        @pagerduty @slack-ai-alerts
+
+        Check:
+        - API key validity
+        - Rate limits
+        - Network connectivity
+        - Model availability
+      `,
+      tags: ['env:production', 'service:ai', 'team:ai'],
+      options: {
+        notify_no_data: true,
+        no_data_timeframe: 10,
+        thresholds: {
+          critical: 0.05, // 5% error rate
+          warning: 0.02   // 2% error rate
+        }
+      }
+    };
+
+    const response = await this.monitorsApi.createMonitor({ body: monitor });
+    return response.data;
+  }
+
+  async createHighLatencyAlert() {
+    const monitor = {
+      name: 'AI High Response Time',
+      type: 'query alert',
+      query: 'avg(last_5m):avg:ai.response_time{*} > 5000',
+      message: `
+        High AI response time: {{value}}ms
+        @pagerduty @slack-ai-alerts
+
+        Investigate:
+        - Model performance
+        - Network latency
+        - API rate limiting
+        - Resource constraints
+      `,
+      tags: ['env:production', 'service:ai', 'metric:latency'],
+      options: {
+        thresholds: {
+          critical: 5000, // 5 seconds
+          warning: 2000   // 2 seconds
+        }
+      }
+    };
+
+    const response = await this.monitorsApi.createMonitor({ body: monitor });
+    return response.data;
+  }
+
+  async createTokenUsageAlert() {
+    const monitor = {
+      name: 'AI High Token Usage',
+      type: 'query alert',
+      query: 'sum(last_1h):sum:ai.tokens.total{*}.as_count() > 100000',
+      message: `
+        High token usage detected: {{value}} tokens/hour
+        @slack-ai-alerts
+
+        Monitor:
+        - Cost implications
+        - Usage optimization
+        - Rate limit adjustments
+      `,
+      tags: ['env:production', 'service:ai', 'metric:usage'],
+      options: {
+        thresholds: {
+          warning: 100000  // 100K tokens per hour
+        }
+      }
+    };
+
+    const response = await this.monitorsApi.createMonitor({ body: monitor });
+    return response.data;
+  }
+
+  async createModelUnavailableAlert() {
+    const monitor = {
+      name: 'AI Model Unavailable',
+      type: 'query alert',
+      query: 'sum(last_5m):sum:ai.model.unavailable{*}.as_count() > 0',
+      message: `
+        AI model unavailable: {{value}} incidents
+        @pagerduty @slack-ai-alerts
+
+        Actions:
+        - Check model status
+        - Implement fallback logic
+        - Contact support if persistent
+      `,
+      tags: ['env:production', 'service:ai', 'severity:high'],
+      options: {
+        notify_no_data: false,
+        thresholds: {
+          critical: 1  // Any unavailability
+        }
+      }
+    };
+
+    const response = await this.monitorsApi.createMonitor({ body: monitor });
+    return response.data;
+  }
+}
+```
+
+### 2. Composite Alerts
+
+```javascript
+export class CompositeAlertCreator {
+  async createCompositeAlerts() {
+    // High error rate AND high latency
+    const compositeAlert = {
+      name: 'AI System Degradation',
+      type: 'composite',
+      query: '123456789 && 987654321', // Monitor IDs
+      message: `
+        AI system degradation detected:
+        - High error rate
+        - High response latency
+
+        @pagerduty @slack-ai-alerts
+
+        This indicates a potential system-wide issue.
+      `,
+      tags: ['env:production', 'service:ai', 'severity:critical']
+    };
+
+    const response = await this.monitorsApi.createMonitor({ body: compositeAlert });
+    return response.data;
+  }
+}
+```
+
+## APM Integration
+
+### 1. Distributed Tracing
+
+```javascript
+// lib/tracing.js
+import tracer from 'dd-trace';
+
+export class AITracer {
+  static createAISpan(operation, parentSpan = null) {
+    const span = parentSpan
+      ? tracer.startSpan(`ai.${operation}`, { childOf: parentSpan })
+      : tracer.startSpan(`ai.${operation}`);
+
+    return span;
+  }
+
+  static traceAIRequest(span, request, startTime) {
+    span.setTag('ai.operation', 'chat');
+    span.setTag('ai.model', request.model);
+    span.setTag('ai.messages_count', request.messages?.length);
+    span.setTag('ai.duration', Date.now() - startTime);
+
+    // Add error information if present
+    if (request.error) {
+      span.setTag('error', true);
+      span.setTag('error.type', request.error.name);
+      span.setTag('error.message', request.error.message);
+    }
+
+    span.finish();
+  }
+
+  static traceStreamingEvent(span, event, data) {
+    const childSpan = tracer.startSpan(`ai.stream.${event}`, { childOf: span });
+    childSpan.setTag('ai.stream.event', event);
+    childSpan.setTag('ai.stream.chunk_size', data?.length || 0);
+    childSpan.finish();
+  }
+}
+
+// Usage in AI service
+export class TracedAIService {
+  async chat(request) {
+    const span = AITracer.createAISpan('chat');
+    const startTime = Date.now();
+
+    try {
+      const response = await this.makeAPIRequest(request);
+      AITracer.traceAIRequest(span, { ...request, response }, startTime);
+      return response;
+    } catch (error) {
+      AITracer.traceAIRequest(span, { ...request, error }, startTime);
+      throw error;
+    }
+  }
+
+  async streamingChat(request, onChunk) {
+    const span = AITracer.createAISpan('streaming_chat');
+    const startTime = Date.now();
+
+    try {
+      const stream = await this.makeStreamingRequest(request);
+
+      for await (const chunk of stream) {
+        AITracer.traceStreamingEvent(span, 'chunk', chunk);
+        onChunk(chunk);
+      }
+
+      AITracer.traceAIRequest(span, request, startTime);
+    } catch (error) {
+      AITracer.traceAIRequest(span, { ...request, error }, startTime);
+      throw error;
+    }
+  }
+}
+```
+
+### 2. Custom Metrics in Traces
+
+```javascript
+export class TracedAIMetrics {
+  static addMetricsToSpan(span, metrics) {
+    if (metrics.responseTime) {
+      span.setTag('ai.response_time', metrics.responseTime);
+    }
+
+    if (metrics.tokenUsage) {
+      span.setTag('ai.prompt_tokens', metrics.tokenUsage.prompt_tokens);
+      span.setTag('ai.completion_tokens', metrics.tokenUsage.completion_tokens);
+      span.setTag('ai.total_tokens', metrics.tokenUsage.total_tokens);
+    }
+
+    if (metrics.cache) {
+      span.setTag('ai.cache.hit', metrics.cache.hit ? 1 : 0);
+      span.setTag('ai.cache.miss', metrics.cache.hit ? 0 : 1);
+    }
+
+    if (metrics.error) {
+      span.setTag('ai.error.code', metrics.error.code);
+      span.setTag('ai.error.status', metrics.error.status);
+    }
+  }
+}
+```
+
+## Best Practices
+
+### Monitoring Strategy
+1. **Define Key Metrics**: Focus on user-facing metrics
+2. **Set Appropriate Thresholds**: Balance sensitivity with noise
+3. **Create Meaningful Alerts**: Ensure alerts drive action
+4. **Monitor in Context**: Correlate AI metrics with business metrics
+
+### Alert Management
+1. **Prioritize Alerts**: Critical, warning, info levels
+2. **Reduce Noise**: Use appropriate time windows and thresholds
+3. **Escalation Paths**: Define who gets alerted when
+4. **Runbooks**: Create response procedures for common issues
+
+### Performance Optimization
+1. **Monitor Resource Usage**: CPU, memory, network
+2. **Track API Performance**: Response times, error rates
+3. **Optimize Queries**: Database and API optimization
+4. **Cache Strategically**: Balance cache hit rates with freshness
+
+### Cost Monitoring
+1. **Track Token Usage**: Monitor consumption patterns
+2. **Cost Attribution**: Track costs by user, model, feature
+3. **Budget Alerts**: Set up spending limits and alerts
+4. **Optimization Opportunities**: Identify high-cost operations
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title="Metrics Not Appearing">
+- Verify Datadog agent is running
+- Check API key and permissions
+- Ensure metrics are being sent correctly
+- Validate metric names and tags
+- Check agent configuration
+</Accordion>
+
+<Accordion title="High False Positive Alerts">
+- Adjust alert thresholds
+- Use appropriate time windows
+- Implement alert suppression
+- Review alert logic and conditions
+- Consider composite alerts
+</Accordion>
+
+<Accordion title="Missing Trace Data">
+- Verify dd-trace is initialized
+- Check service name configuration
+- Ensure spans are properly closed
+- Validate trace sampling rates
+- Check for span context propagation
+</Accordion>
+
+<Accordion title="Performance Impact">
+- Monitor resource usage of monitoring
+- Optimize metric collection frequency
+- Use sampling for high-volume metrics
+- Implement batching for metrics submission
+- Review and clean up unused metrics
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title: "New Relic Monitoring"
+    icon: "chart-line"
+    href: "/platform/monitoring/new-relic"
+  >
+    Set up monitoring with New Relic
+  </Card>
+  <Card
+    title: "Custom Dashboards"
+    icon: "dashboard"
+    href: "/guides/advanced/monitoring"
+  >
+    Create custom monitoring solutions
+  </Card>
+  <Card
+    title: "Alert Management"
+    icon: "bell"
+    href: "/guides/advanced/alerting"
+  >
+    Advanced alerting strategies
+  </Card>
+  <Card
+    title: "Performance Guide"
+    icon: "bolt"
+    href: "/guides/advanced/optimization"
+  >
+    Optimize based on monitoring data
+  </Card>
+</CardGroup>

@@ -1,0 +1,673 @@
+---
+title: "JavaScript SDK Installation"
+description: "Install and set up the SundayPyjamas AI Suite JavaScript SDK"
+---
+
+## Installation
+
+### npm
+
+```bash
+npm install @sundaypyjamas/ai-sdk
+```
+
+### yarn
+
+```bash
+yarn add @sundaypyjamas/ai-sdk
+```
+
+### pnpm
+
+```bash
+pnpm add @sundaypyjamas/ai-sdk
+```
+
+### CDN
+
+For browser usage without a build step:
+
+```html
+<script src="https://cdn.sundaypyjamas.com/ai-sdk/v1.0.0/browser.js"></script>
+```
+
+## Requirements
+
+### Node.js
+- **Node.js**: 18.0 or higher
+- **TypeScript**: 4.5 or higher (optional, for TypeScript support)
+
+### Browser Support
+- **Chrome**: 90+
+- **Firefox**: 88+
+- **Safari**: 14+
+- **Edge**: 90+
+
+## Quick Setup
+
+### 1. Import the SDK
+
+```javascript
+// ES6 Modules
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+// CommonJS
+const { SundayPyjamasAI } = require('@sundaypyjamas/ai-sdk');
+```
+
+### 2. Initialize the Client
+
+```javascript
+// With API Key
+const ai = new SundayPyjamasAI({
+  apiKey: 'spj_ai_your_api_key_here'
+});
+
+// With custom configuration
+const ai = new SundayPyjamasAI({
+  apiKey: 'spj_ai_your_api_key_here',
+  baseURL: 'https://custom.api.endpoint.com',
+  timeout: 30000,
+  maxRetries: 3
+});
+```
+
+### 3. Make Your First Request
+
+```javascript
+async function main() {
+  try {
+    const response = await ai.chat({
+      messages: [
+        { role: 'user', content: 'Hello, how are you?' }
+      ],
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.7
+    });
+
+    console.log(response.choices[0].message.content);
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
+}
+
+main();
+```
+
+## Environment Variables
+
+### Node.js Environment
+
+Create a `.env` file:
+
+```env
+SUNDAYPYJAMAS_API_KEY=spj_ai_your_api_key_here
+```
+
+Use in your code:
+
+```javascript
+import { config } from 'dotenv';
+config();
+
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY
+});
+```
+
+### Browser Environment
+
+For browser usage, never expose your API key directly. Use a backend proxy:
+
+```javascript
+// ❌ Don't do this - API key exposed
+const ai = new SundayPyjamasAI({
+  apiKey: 'spj_ai_your_api_key_here' // Visible to users!
+});
+
+// ✅ Do this - use a proxy
+const ai = new SundayPyjamasAI({
+  baseURL: '/api/ai' // Proxy to your backend
+});
+```
+
+## TypeScript Support
+
+The SDK includes full TypeScript definitions:
+
+```typescript
+import { SundayPyjamasAI, ChatRequest, ChatResponse } from '@sundaypyjamas/ai-sdk';
+
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY
+});
+
+// TypeScript will provide autocomplete and type checking
+const request: ChatRequest = {
+  messages: [
+    { role: 'user', content: 'Hello!' }
+  ],
+  model: 'llama-3.3-70b-versatile',
+  temperature: 0.7
+};
+
+const response: ChatResponse = await ai.chat(request);
+```
+
+## Configuration Options
+
+### Client Configuration
+
+```javascript
+const ai = new SundayPyjamasAI({
+  // Required
+  apiKey: 'spj_ai_your_api_key_here',
+
+  // Optional
+  baseURL: 'https://suite.sundaypyjamas.com/api/v1', // Default API endpoint
+  timeout: 60000, // Request timeout in milliseconds (default: 60000)
+  maxRetries: 3, // Maximum number of retries (default: 3)
+  retryDelay: 1000, // Initial retry delay in milliseconds (default: 1000)
+
+  // Advanced options
+  headers: {
+    'User-Agent': 'MyApp/1.0.0',
+    'X-Custom-Header': 'custom-value'
+  },
+
+  // HTTP agent options (Node.js only)
+  agent: {
+    keepAlive: true,
+    keepAliveMsecs: 30000,
+    maxSockets: 10,
+    maxFreeSockets: 5
+  }
+});
+```
+
+### Environment-Specific Configuration
+
+```javascript
+// Development configuration
+const devConfig = {
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY,
+  baseURL: 'https://dev.suite.sundaypyjamas.com/api/v1',
+  timeout: 120000, // Longer timeout for development
+  maxRetries: 5
+};
+
+// Production configuration
+const prodConfig = {
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY,
+  baseURL: 'https://suite.sundaypyjamas.com/api/v1',
+  timeout: 30000,
+  maxRetries: 2
+};
+
+// Select configuration based on environment
+const config = process.env.NODE_ENV === 'production' ? prodConfig : devConfig;
+const ai = new SundayPyjamasAI(config);
+```
+
+## Framework Integration
+
+### Next.js
+
+#### App Router (Recommended)
+
+```javascript
+// app/api/chat/route.js
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+import { NextResponse } from 'next/server';
+
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY
+});
+
+export async function POST(request) {
+  try {
+    const { messages } = await request.json();
+
+    const response = await ai.chat({
+      messages,
+      model: 'llama-3.3-70b-versatile'
+    });
+
+    return NextResponse.json(response);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
+  }
+}
+```
+
+#### Pages Router
+
+```javascript
+// pages/api/chat.js
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY
+});
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const { messages } = req.body;
+
+    const response = await ai.chat({
+      messages,
+      model: 'llama-3.3-70b-versatile'
+    });
+
+    res.status(200).json(response);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+```
+
+### React
+
+```jsx
+// hooks/useAI.js
+import { useState, useCallback } from 'react';
+
+export function useAI() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const chat = useCallback(async (messages) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ messages })
+      });
+
+      if (!response.ok) {
+        throw new Error('Chat request failed');
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  return { chat, isLoading, error };
+}
+```
+
+### Vue.js
+
+```javascript
+// composables/useAI.js
+import { ref } from 'vue';
+
+export function useAI() {
+  const isLoading = ref(false);
+  const error = ref(null);
+
+  const chat = async (messages) => {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ messages })
+      });
+
+      if (!response.ok) {
+        throw new Error('Chat request failed');
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (err) {
+      error.value = err.message;
+      throw err;
+    } finally {
+      isLoading.value = false;
+    }
+  };
+
+  return { chat, isLoading, error };
+}
+```
+
+### Svelte
+
+```javascript
+// stores/ai.js
+import { writable } from 'svelte/store';
+
+export function createAIStore() {
+  const { subscribe, set, update } = writable({
+    isLoading: false,
+    error: null,
+    response: null
+  });
+
+  const chat = async (messages) => {
+    update(state => ({ ...state, isLoading: true, error: null }));
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ messages })
+      });
+
+      if (!response.ok) {
+        throw new Error('Chat request failed');
+      }
+
+      const data = await response.json();
+      update(state => ({ ...state, response: data }));
+      return data;
+    } catch (err) {
+      update(state => ({ ...state, error: err.message }));
+      throw err;
+    } finally {
+      update(state => ({ ...state, isLoading: false }));
+    }
+  };
+
+  return { subscribe, chat };
+}
+```
+
+## Error Handling
+
+### Global Error Handling
+
+```javascript
+// Set up global error handling
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY,
+  onError: (error) => {
+    console.error('AI SDK Error:', error);
+    // Send to error reporting service
+    reportError(error);
+  }
+});
+```
+
+### Try-Catch with Specific Error Types
+
+```javascript
+try {
+  const response = await ai.chat({
+    messages: [{ role: 'user', content: 'Hello!' }]
+  });
+} catch (error) {
+  if (error.status === 401) {
+    // Handle authentication error
+    console.error('Invalid API key');
+  } else if (error.status === 429) {
+    // Handle rate limit error
+    console.error('Rate limit exceeded');
+  } else if (error.code === 'NETWORK_ERROR') {
+    // Handle network error
+    console.error('Network connection failed');
+  } else {
+    // Handle other errors
+    console.error('Unknown error:', error.message);
+  }
+}
+```
+
+## Logging and Debugging
+
+### Enable Debug Mode
+
+```javascript
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY,
+  debug: true, // Enable debug logging
+  logLevel: 'info' // 'error' | 'warn' | 'info' | 'debug'
+});
+```
+
+### Custom Logger
+
+```javascript
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY,
+  logger: {
+    error: (message, context) => {
+      // Send to error reporting service
+      console.error('AI SDK Error:', message, context);
+    },
+    warn: (message, context) => {
+      console.warn('AI SDK Warning:', message, context);
+    },
+    info: (message, context) => {
+      console.info('AI SDK Info:', message, context);
+    },
+    debug: (message, context) => {
+      console.debug('AI SDK Debug:', message, context);
+    }
+  }
+});
+```
+
+## Security Best Practices
+
+### API Key Management
+
+```javascript
+// Never expose API keys in client-side code
+// ❌ Bad
+const client = new SundayPyjamasAI({
+  apiKey: 'spj_ai_your_key_here' // Exposed to users!
+});
+
+// ✅ Good - Use environment variables
+const client = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY
+});
+
+// For browser usage, proxy through your backend
+const client = new SundayPyjamasAI({
+  baseURL: '/api/ai' // Proxy endpoint
+});
+```
+
+### Input Validation
+
+```javascript
+// Validate user input before sending to AI
+function validateMessage(message) {
+  if (!message || typeof message !== 'string') {
+    throw new Error('Message must be a non-empty string');
+  }
+
+  if (message.length > 10000) {
+    throw new Error('Message too long');
+  }
+
+  // Sanitize input
+  return message.trim();
+}
+
+// Use in your chat function
+const response = await ai.chat({
+  messages: [
+    { role: 'user', content: validateMessage(userInput) }
+  ]
+});
+```
+
+### Rate Limiting
+
+```javascript
+// Implement client-side rate limiting
+class RateLimitedAI extends SundayPyjamasAI {
+  constructor(config) {
+    super(config);
+    this.requestsPerSecond = config.requestsPerSecond || 10;
+    this.requestQueue = [];
+    this.lastRequestTime = 0;
+  }
+
+  async chat(messages) {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+
+    if (timeSinceLastRequest < (1000 / this.requestsPerSecond)) {
+      // Wait before making request
+      await new Promise(resolve =>
+        setTimeout(resolve, (1000 / this.requestsPerSecond) - timeSinceLastRequest)
+      );
+    }
+
+    this.lastRequestTime = Date.now();
+    return super.chat(messages);
+  }
+}
+```
+
+## Troubleshooting
+
+### Common Installation Issues
+
+<AccordionGroup>
+<Accordion title="Module Not Found Error">
+- Verify the package is installed: `npm list @sundaypyjamas/ai-sdk`
+- Try reinstalling: `npm uninstall @sundaypyjamas/ai-sdk && npm install @sundaypyjamas/ai-sdk`
+- Clear node_modules and reinstall: `rm -rf node_modules && npm install`
+- Check your package.json for correct version
+</Accordion>
+
+<Accordion title="TypeScript Type Errors">
+- Ensure you're using TypeScript 4.5+
+- Install types separately if needed
+- Check for type definition conflicts
+- Update your tsconfig.json compiler options
+</Accordion>
+
+<Accordion title="Browser Compatibility Issues">
+- Use a bundler like Webpack or Vite for better browser support
+- Include polyfills for older browsers
+- Check the browser console for specific errors
+- Use the CDN version for simple use cases
+</Accordion>
+
+<Accordion title="Network Request Failures">
+- Verify your API key is correct
+- Check your internet connection
+- Ensure the API endpoint is accessible
+- Check for CORS issues in browser
+- Verify firewall/proxy settings
+</Accordion>
+</AccordionGroup>
+
+## Version Management
+
+### Check Current Version
+
+```javascript
+import { version } from '@sundaypyjamas/ai-sdk';
+
+console.log('SDK Version:', version);
+```
+
+### Update to Latest Version
+
+```bash
+# Update to latest version
+npm update @sundaypyjamas/ai-sdk
+
+# Update to specific version
+npm install @sundaypyjamas/ai-sdk@1.2.0
+
+# Check for outdated packages
+npm outdated @sundaypyjamas/ai-sdk
+```
+
+### Migration Guide
+
+#### Upgrading from v1.0.x to v1.1.x
+
+```javascript
+// v1.0.x
+const ai = new SundayPyjamasAI('your-api-key');
+
+// v1.1.x - Configuration object required
+const ai = new SundayPyjamasAI({
+  apiKey: 'your-api-key'
+});
+```
+
+## Support
+
+### Getting Help
+
+1. **Documentation**: Check this guide and API reference
+2. **GitHub Issues**: Report bugs and feature requests
+3. **Community**: Ask questions in our community forums
+4. **Support**: Contact support for enterprise issues
+
+### Examples
+
+Check out our [code examples](/examples/javascript) for complete working examples of the JavaScript SDK.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/sdks/javascript/quickstart"
+  >
+    Get started with your first AI request.
+  </Card>
+  <Card
+    title="Chat API"
+    icon="comments"
+    href="/sdks/javascript/chat-api"
+  >
+    Learn about chat completions and conversations.
+  </Card>
+  <Card
+    title="Streaming"
+    icon="bolt"
+    href="/sdks/javascript/streaming"
+  >
+    Implement real-time streaming responses.
+  </Card>
+  <Card
+    title="Error Handling"
+    icon="triangle-exclamation"
+    href="/sdks/javascript/error-handling"
+  >
+    Master error handling and debugging.
+  </Card>
+</CardGroup>
+
+<Note>
+The JavaScript SDK is designed to work seamlessly across Node.js and browser environments. For production applications, always implement proper error handling, rate limiting, and security measures.
+</Note>

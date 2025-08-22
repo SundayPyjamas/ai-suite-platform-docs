@@ -1,0 +1,817 @@
+---
+title: "JavaScript SDK - Chat API"
+description: "Complete guide to using the Chat API with the JavaScript SDK"
+---
+
+## Overview
+
+The Chat API enables conversational AI interactions with SundayPyjamas AI Suite. This guide covers creating conversations, managing context, and handling responses.
+
+## Basic Chat Completion
+
+### Single Message
+
+```javascript
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY
+});
+
+async function basicChat() {
+  const response = await ai.chat({
+    messages: [
+      { role: 'user', content: 'Hello! How are you today?' }
+    ],
+    model: 'llama-3.3-70b-versatile',
+    temperature: 0.7
+  });
+
+  console.log(response.choices[0].message.content);
+  console.log('Usage:', response.usage);
+}
+
+basicChat();
+```
+
+### Multi-turn Conversation
+
+```javascript
+async function conversation() {
+  const conversation = [
+    { role: 'system', content: 'You are a helpful assistant.' }
+  ];
+
+  // First message
+  conversation.push({ role: 'user', content: 'What is JavaScript?' });
+
+  let response = await ai.chat({
+    messages: conversation,
+    model: 'llama-3.3-70b-versatile'
+  });
+
+  conversation.push(response.choices[0].message);
+
+  // Follow-up question
+  conversation.push({ role: 'user', content: 'Can you give me a simple example?' });
+
+  response = await ai.chat({
+    messages: conversation,
+    model: 'llama-3.3-70b-versatile'
+  });
+
+  console.log(response.choices[0].message.content);
+}
+```
+
+## Advanced Chat Features
+
+### Message Types
+
+#### System Messages
+```javascript
+const response = await ai.chat({
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an expert JavaScript developer who provides clear, concise code examples.'
+    },
+    {
+      role: 'user',
+      content: 'How do I create a promise in JavaScript?'
+    }
+  ]
+});
+```
+
+#### User Messages
+```javascript
+const response = await ai.chat({
+  messages: [
+    {
+      role: 'user',
+      content: 'Explain async/await with an example.',
+      metadata: {
+        userId: '123',
+        sessionId: 'abc'
+      }
+    }
+  ]
+});
+```
+
+#### Assistant Messages
+```javascript
+// When continuing a conversation, include previous assistant responses
+const response = await ai.chat({
+  messages: [
+    { role: 'user', content: 'What is Node.js?' },
+    {
+      role: 'assistant',
+      content: 'Node.js is a JavaScript runtime built on Chrome\'s V8 JavaScript engine.'
+    },
+    { role: 'user', content: 'What are its main features?' }
+  ]
+});
+```
+
+### Chat Parameters
+
+#### Temperature Control
+
+```javascript
+// Creative responses
+const creative = await ai.chat({
+  messages: [{ role: 'user', content: 'Write a short story' }],
+  temperature: 0.9 // High creativity
+});
+
+// Factual responses
+const factual = await ai.chat({
+  messages: [{ role: 'user', content: 'What is the capital of France?' }],
+  temperature: 0.1 // Low creativity, more focused
+});
+```
+
+#### Max Tokens
+
+```javascript
+// Short response
+const short = await ai.chat({
+  messages: [{ role: 'user', content: 'Define AI' }],
+  max_tokens: 50
+});
+
+// Long response
+const long = await ai.chat({
+  messages: [{ role: 'user', content: 'Explain machine learning in detail' }],
+  max_tokens: 1000
+});
+```
+
+#### Presence and Frequency Penalties
+
+```javascript
+// Encourage diverse topics
+const diverse = await ai.chat({
+  messages: [{ role: 'user', content: 'Tell me about technology' }],
+  presence_penalty: 0.6, // Encourage new topics
+  frequency_penalty: 0.3  // Reduce repetition
+});
+```
+
+### Model Selection
+
+```javascript
+// General purpose
+const general = await ai.chat({
+  messages: [{ role: 'user', content: 'Explain photosynthesis' }],
+  model: 'llama-3.3-70b-versatile'
+});
+
+// Code generation
+const code = await ai.chat({
+  messages: [{ role: 'user', content: 'Write a Python function to sort a list' }],
+  model: 'llama-3.3-70b-code'
+});
+
+// Creative writing
+const creative = await ai.chat({
+  messages: [{ role: 'user', content: 'Write a haiku about programming' }],
+  model: 'llama-3.3-70b-creative'
+});
+```
+
+## Streaming Responses
+
+### Basic Streaming
+
+```javascript
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY
+});
+
+async function streamingChat() {
+  const stream = ai.chatStream({
+    messages: [{ role: 'user', content: 'Tell me a story about AI' }],
+    model: 'llama-3.3-70b-versatile',
+    temperature: 0.8
+  });
+
+  console.log('AI: ');
+  for await (const chunk of stream) {
+    if (chunk.choices[0].delta.content) {
+      process.stdout.write(chunk.choices[0].delta.content);
+    }
+  }
+  console.log('\n');
+}
+
+streamingChat();
+```
+
+### React Streaming Component
+
+```jsx
+import { useState, useRef, useEffect } from 'react';
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+export default function StreamingChat() {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const ai = useRef(new SundayPyjamasAI({
+    apiKey: process.env.NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY
+  }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!input.trim() || isStreaming) return;
+
+    const userMessage = { role: 'user', content: input };
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setInput('');
+    setIsStreaming(true);
+
+    try {
+      const stream = ai.current.chatStream({
+        messages: newMessages,
+        model: 'llama-3.3-70b-versatile'
+      });
+
+      let assistantContent = '';
+      const assistantMessage = { role: 'assistant', content: '' };
+      setMessages([...newMessages, assistantMessage]);
+
+      for await (const chunk of stream) {
+        if (chunk.choices[0].delta.content) {
+          assistantContent += chunk.choices[0].delta.content;
+          setMessages([...newMessages, { ...assistantMessage, content: assistantContent }]);
+        }
+      }
+    } catch (error) {
+      console.error('Streaming error:', error);
+    } finally {
+      setIsStreaming(false);
+    }
+  };
+
+  return (
+    <div className="chat-container">
+      <div className="messages">
+        {messages.map((message, index) => (
+          <div key={index} className={`message ${message.role}`}>
+            <strong>{message.role === 'user' ? 'You' : 'AI'}:</strong>
+            <span>{message.content}</span>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit} className="input-form">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type your message..."
+          disabled={isStreaming}
+        />
+        <button type="submit" disabled={isStreaming || !input.trim()}>
+          {isStreaming ? 'Streaming...' : 'Send'}
+        </button>
+      </form>
+    </div>
+  );
+}
+```
+
+### Streaming with AbortController
+
+```javascript
+async function cancellableStreaming() {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+  try {
+    const stream = ai.chatStream({
+      messages: [{ role: 'user', content: 'Tell me a long story' }],
+      model: 'llama-3.3-70b-versatile'
+    }, { signal: controller.signal });
+
+    console.log('AI: ');
+    for await (const chunk of stream) {
+      if (chunk.choices[0].delta.content) {
+        process.stdout.write(chunk.choices[0].delta.content);
+      }
+    }
+    console.log('\n');
+
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.log('\nStreaming was cancelled');
+    } else {
+      console.error('Streaming error:', error);
+    }
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// Cancel streaming after 2 seconds
+setTimeout(() => controller.abort(), 2000);
+```
+
+## Error Handling
+
+### Basic Error Handling
+
+```javascript
+async function safeChat() {
+  try {
+    const response = await ai.chat({
+      messages: [{ role: 'user', content: 'Hello!' }]
+    });
+    return response;
+  } catch (error) {
+    console.error('Chat error:', error);
+
+    // Handle specific error types
+    if (error.status === 401) {
+      throw new Error('Invalid API key');
+    } else if (error.status === 429) {
+      throw new Error('Rate limit exceeded. Please try again later.');
+    } else if (error.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else {
+      throw new Error('Unknown error occurred');
+    }
+  }
+}
+```
+
+### Retry Logic
+
+```javascript
+import { setTimeout } from 'timers/promises';
+
+class RetryableChat {
+  constructor(ai, maxRetries = 3) {
+    this.ai = ai;
+    this.maxRetries = maxRetries;
+  }
+
+  async chatWithRetry(messages, options = {}) {
+    let lastError;
+
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        return await this.ai.chat({
+          messages,
+          ...options
+        });
+      } catch (error) {
+        lastError = error;
+
+        // Don't retry certain errors
+        if (error.status === 401 || error.status === 400) {
+          throw error;
+        }
+
+        // Retry with exponential backoff
+        if (attempt < this.maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000;
+          console.log(`Attempt ${attempt} failed, retrying in ${delay}ms`);
+          await setTimeout(delay);
+        }
+      }
+    }
+
+    throw lastError;
+  }
+}
+
+const retryableChat = new RetryableChat(ai);
+const response = await retryableChat.chatWithRetry(
+  [{ role: 'user', content: 'Hello!' }]
+);
+```
+
+### Circuit Breaker Pattern
+
+```javascript
+class CircuitBreaker {
+  constructor(failureThreshold = 5, timeout = 30000) {
+    this.failureThreshold = failureThreshold;
+    this.timeout = timeout;
+    this.failureCount = 0;
+    this.lastFailureTime = null;
+    this.state = 'closed';
+  }
+
+  async execute(fn) {
+    if (this.state === 'open') {
+      if (Date.now() - this.lastFailureTime > this.timeout) {
+        this.state = 'half-open';
+      } else {
+        throw new Error('Circuit breaker is open');
+      }
+    }
+
+    try {
+      const result = await fn();
+      this.onSuccess();
+      return result;
+    } catch (error) {
+      this.onFailure();
+      throw error;
+    }
+  }
+
+  onSuccess() {
+    this.failureCount = 0;
+    this.state = 'closed';
+  }
+
+  onFailure() {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+
+    if (this.failureCount >= this.failureThreshold) {
+      this.state = 'open';
+    }
+  }
+}
+
+const circuitBreaker = new CircuitBreaker();
+
+async function protectedChat() {
+  return await circuitBreaker.execute(() =>
+    ai.chat({
+      messages: [{ role: 'user', content: 'Hello!' }]
+    })
+  );
+}
+```
+
+## Context Management
+
+### Conversation Memory
+
+```javascript
+class ConversationManager {
+  constructor(maxMessages = 50) {
+    this.conversations = new Map();
+    this.maxMessages = maxMessages;
+  }
+
+  addMessage(conversationId, message) {
+    if (!this.conversations.has(conversationId)) {
+      this.conversations.set(conversationId, []);
+    }
+
+    const conversation = this.conversations.get(conversationId);
+    conversation.push(message);
+
+    // Keep only recent messages
+    if (conversation.length > this.maxMessages) {
+      conversation.splice(0, conversation.length - this.maxMessages);
+    }
+  }
+
+  getConversation(conversationId) {
+    return this.conversations.get(conversationId) || [];
+  }
+
+  clearConversation(conversationId) {
+    this.conversations.delete(conversationId);
+  }
+
+  summarizeConversation(conversationId) {
+    const conversation = this.getConversation(conversationId);
+    if (conversation.length === 0) return null;
+
+    // Create a summary of the conversation
+    const summary = conversation
+      .slice(-10) // Last 10 messages
+      .map(msg => `${msg.role}: ${msg.content}`)
+      .join('\n');
+
+    return {
+      totalMessages: conversation.length,
+      summary,
+      lastActivity: conversation[conversation.length - 1].timestamp
+    };
+  }
+}
+```
+
+### Context Optimization
+
+```javascript
+class ContextOptimizer {
+  static compressMessages(messages) {
+    return messages.map(message => ({
+      role: message.role,
+      content: message.content.trim(),
+      timestamp: message.timestamp
+    }));
+  }
+
+  static removeRedundantMessages(messages) {
+    const uniqueMessages = [];
+    const seen = new Set();
+
+    for (const message of messages.reverse()) {
+      const key = `${message.role}:${message.content}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueMessages.unshift(message);
+      }
+    }
+
+    return uniqueMessages;
+  }
+
+  static summarizeLongMessages(messages, maxLength = 1000) {
+    return messages.map(message => {
+      if (message.content.length > maxLength) {
+        return {
+          ...message,
+          content: message.content.substring(0, maxLength) + '...'
+        };
+      }
+      return message;
+    });
+  }
+}
+```
+
+## Rate Limiting
+
+### Client-Side Rate Limiting
+
+```javascript
+class RateLimiter {
+  constructor(requestsPerMinute = 60) {
+    this.requestsPerMinute = requestsPerMinute;
+    this.requests = [];
+    this.windowMs = 60 * 1000; // 1 minute
+  }
+
+  async checkLimit() {
+    const now = Date.now();
+    const windowStart = now - this.windowMs;
+
+    // Remove old requests
+    this.requests = this.requests.filter(time => time > windowStart);
+
+    if (this.requests.length >= this.requestsPerMinute) {
+      const oldestRequest = this.requests[0];
+      const waitTime = this.windowMs - (now - oldestRequest);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+
+    this.requests.push(now);
+  }
+}
+
+const rateLimiter = new RateLimiter();
+
+async function rateLimitedChat() {
+  await rateLimiter.checkLimit();
+
+  return await ai.chat({
+    messages: [{ role: 'user', content: 'Hello!' }]
+  });
+}
+```
+
+### Adaptive Rate Limiting
+
+```javascript
+class AdaptiveRateLimiter {
+  constructor() {
+    this.successCount = 0;
+    this.errorCount = 0;
+    this.currentLimit = 60;
+    this.adjustmentInterval = 1000; // 1 second
+    this.lastAdjustment = Date.now();
+  }
+
+  async checkLimit() {
+    const now = Date.now();
+
+    // Adjust limits periodically
+    if (now - this.lastAdjustment > this.adjustmentInterval) {
+      this.adjustLimits();
+      this.lastAdjustment = now;
+    }
+
+    // Implement token bucket or sliding window logic here
+    // For simplicity, using a basic counter
+    if (this.currentLimit > 0) {
+      this.currentLimit--;
+      return true;
+    }
+
+    throw new Error('Rate limit exceeded');
+  }
+
+  recordSuccess() {
+    this.successCount++;
+  }
+
+  recordError() {
+    this.errorCount++;
+  }
+
+  adjustLimits() {
+    const total = this.successCount + this.errorCount;
+    if (total === 0) return;
+
+    const errorRate = this.errorCount / total;
+
+    if (errorRate > 0.1) {
+      // High error rate, reduce limit
+      this.currentLimit = Math.max(10, this.currentLimit * 0.8);
+    } else if (errorRate < 0.05) {
+      // Low error rate, increase limit
+      this.currentLimit = Math.min(120, this.currentLimit * 1.2);
+    }
+
+    // Reset counters
+    this.successCount = 0;
+    this.errorCount = 0;
+  }
+}
+```
+
+## Usage Optimization
+
+### Token Usage Monitoring
+
+```javascript
+class TokenUsageTracker {
+  constructor() {
+    this.usage = {
+      total: 0,
+      byModel: {},
+      byEndpoint: {},
+      history: []
+    };
+  }
+
+  trackUsage(model, endpoint, tokens, cost) {
+    this.usage.total += tokens;
+    this.usage.byModel[model] = (this.usage.byModel[model] || 0) + tokens;
+    this.usage.byEndpoint[endpoint] = (this.usage.byEndpoint[endpoint] || 0) + tokens;
+
+    this.usage.history.push({
+      timestamp: Date.now(),
+      model,
+      endpoint,
+      tokens,
+      cost
+    });
+
+    // Keep last 1000 entries
+    if (this.usage.history.length > 1000) {
+      this.usage.history.shift();
+    }
+  }
+
+  getUsageStats() {
+    const now = Date.now();
+    const last24h = now - 24 * 60 * 60 * 1000;
+
+    const recentUsage = this.usage.history.filter(
+      item => item.timestamp > last24h
+    );
+
+    const totalRecent = recentUsage.reduce((sum, item) => sum + item.tokens, 0);
+    const totalCost = recentUsage.reduce((sum, item) => sum + item.cost, 0);
+
+    return {
+      total: this.usage.total,
+      last24h: totalRecent,
+      averagePerHour: totalRecent / 24,
+      totalCost,
+      byModel: this.usage.byModel,
+      byEndpoint: this.usage.byEndpoint
+    };
+  }
+}
+
+const usageTracker = new TokenUsageTracker();
+
+// Track usage in your chat function
+const response = await ai.chat({
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+
+usageTracker.trackUsage(
+  'llama-3.3-70b-versatile',
+  '/chat',
+  response.usage.total_tokens,
+  calculateCost(response.usage)
+);
+```
+
+## Best Practices
+
+### Message Formatting
+```javascript
+// Good: Clear, specific messages
+const goodMessage = {
+  role: 'user',
+  content: 'Create a Python function that sorts a list using quicksort algorithm. Include error handling and time complexity analysis.'
+};
+
+// Bad: Vague, unclear messages
+const badMessage = {
+  role: 'user',
+  content: 'Sort list python'
+};
+```
+
+### Context Management
+```javascript
+// Keep conversations focused
+const focusedConversation = [
+  { role: 'system', content: 'You are a Python expert.' },
+  { role: 'user', content: 'How do I use list comprehensions?' },
+  { role: 'assistant', content: 'List comprehensions provide a concise way to create lists...' },
+  { role: 'user', content: 'Can you give me an example with filtering?' }
+];
+
+// Avoid context pollution
+const pollutedConversation = [
+  { role: 'user', content: 'What is JavaScript?' },
+  { role: 'user', content: 'What is Python?' },
+  { role: 'user', content: 'What is Java?' },
+  { role: 'user', content: 'Tell me about list comprehensions in Python' }
+];
+```
+
+### Error Recovery
+```javascript
+async function robustChat(messages, options = {}) {
+  const maxRetries = options.maxRetries || 3;
+  const fallbackModels = options.fallbackModels || ['llama-3.3-70b-versatile'];
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const model = attempt === 0 ? options.model : fallbackModels[attempt - 1];
+      if (!model) break;
+
+      return await ai.chat({
+        messages,
+        model,
+        ...options
+      });
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title: "Streaming Guide"
+    icon: "bolt"
+    href: "/sdks/javascript/streaming"
+  >
+    Learn advanced streaming techniques
+  </Card>
+  <Card
+    title: "Error Handling"
+    icon: "triangle-exclamation"
+    href: "/sdks/javascript/error-handling"
+  >
+    Master error handling patterns
+  </Card>
+  <Card
+    title: "Examples"
+    icon: "code"
+    href: "/examples/javascript"
+  >
+    See complete code examples
+  </Card>
+  <Card
+    title: "API Reference"
+    icon: "book"
+    href: "/api-reference/chat/introduction"
+  >
+    Full API documentation
+  </Card>
+</CardGroup>

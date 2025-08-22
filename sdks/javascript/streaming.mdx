@@ -1,0 +1,893 @@
+---
+title: "JavaScript SDK - Streaming"
+description: "Master real-time streaming responses with the JavaScript SDK"
+---
+
+## Overview
+
+Streaming enables real-time, incremental responses from the AI model, providing a better user experience by showing responses as they're generated. This guide covers streaming implementation, patterns, and best practices.
+
+## Basic Streaming
+
+### Simple Stream
+
+```javascript
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY
+});
+
+async function basicStream() {
+  const stream = ai.chatStream({
+    messages: [{ role: 'user', content: 'Tell me a story about AI' }],
+    model: 'llama-3.3-70b-versatile',
+    temperature: 0.8
+  });
+
+  console.log('AI: ');
+  for await (const chunk of stream) {
+    if (chunk.choices[0].delta.content) {
+      process.stdout.write(chunk.choices[0].delta.content);
+    }
+  }
+  console.log('\n');
+}
+
+basicStream();
+```
+
+### Node.js Readable Stream
+
+```javascript
+import { Readable } from 'stream';
+
+class AIStream extends Readable {
+  constructor(messages, options = {}) {
+    super();
+    this.messages = messages;
+    this.options = options;
+    this.ai = new SundayPyjamasAI({
+      apiKey: process.env.SUNDAYPYJAMAS_API_KEY
+    });
+  }
+
+  async _read() {
+    try {
+      const stream = this.ai.chatStream({
+        messages: this.messages,
+        ...this.options
+      });
+
+      for await (const chunk of stream) {
+        if (chunk.choices[0].delta.content) {
+          this.push(chunk.choices[0].delta.content);
+        }
+      }
+
+      this.push(null); // End of stream
+    } catch (error) {
+      this.emit('error', error);
+    }
+  }
+}
+
+// Usage
+const aiStream = new AIStream(
+  [{ role: 'user', content: 'Explain quantum computing' }],
+  { model: 'llama-3.3-70b-versatile' }
+);
+
+aiStream.pipe(process.stdout);
+```
+
+## React Integration
+
+### Custom Hook
+
+```jsx
+import { useState, useCallback, useRef } from 'react';
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+export function useStreamingChat(apiKey) {
+  const [messages, setMessages] = useState([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState(null);
+  const abortControllerRef = useRef(null);
+  const aiRef = useRef(new SundayPyjamasAI({ apiKey }));
+
+  const sendMessage = useCallback(async (content) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    setIsStreaming(true);
+    setError(null);
+
+    const userMessage = { role: 'user', content };
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+
+    try {
+      const stream = aiRef.current.chatStream({
+        messages: newMessages,
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.7
+      }, { signal: abortController.signal });
+
+      let assistantContent = '';
+      const assistantMessage = { role: 'assistant', content: '' };
+      setMessages([...newMessages, assistantMessage]);
+
+      for await (const chunk of stream) {
+        if (chunk.choices[0].delta.content) {
+          assistantContent += chunk.choices[0].delta.content;
+          setMessages([...newMessages, {
+            role: 'assistant',
+            content: assistantContent
+          }]);
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        setError(err.message);
+      }
+    } finally {
+      setIsStreaming(false);
+      abortControllerRef.current = null;
+    }
+  }, [messages]);
+
+  const stopStreaming = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
+
+  return {
+    messages,
+    isStreaming,
+    error,
+    sendMessage,
+    stopStreaming
+  };
+}
+```
+
+### Streaming Chat Component
+
+```jsx
+import { useStreamingChat } from './hooks/useStreamingChat';
+
+export default function StreamingChat({ apiKey }) {
+  const { messages, isStreaming, error, sendMessage, stopStreaming } = useStreamingChat(apiKey);
+  const [input, setInput] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (input.trim() && !isStreaming) {
+      sendMessage(input.trim());
+      setInput('');
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b p-4">
+        <h1 className="text-xl font-semibold">AI Chat (Streaming)</h1>
+        <div className="flex items-center gap-2">
+          {isStreaming && (
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-sm text-gray-600">AI is typing...</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-100 border-l-4 border-red-500 p-4 m-4">
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.length === 0 && (
+          <div className="text-center text-gray-500 mt-8">
+            Start a conversation to see streaming responses!
+          </div>
+        )}
+
+        {messages.map((message, index) => (
+          <div
+            key={index}
+            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            <div
+              className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                message.role === 'user'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-900'
+              }`}
+            >
+              <div className="text-xs opacity-75 mb-1">
+                {message.role === 'user' ? 'You' : 'AI'}
+              </div>
+              <div className="whitespace-pre-wrap">{message.content}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Input */}
+      <div className="bg-white border-t p-4">
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type your message..."
+            disabled={isStreaming}
+            className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={isStreaming || !input.trim()}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
+          >
+            {isStreaming ? 'Stop' : 'Send'}
+          </button>
+          {isStreaming && (
+            <button
+              type="button"
+              onClick={stopStreaming}
+              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+            >
+              Stop
+            </button>
+          )}
+        </form>
+        <div className="text-xs text-gray-500 mt-2">
+          Press Enter to send, Shift+Enter for new line
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+## Advanced Streaming Patterns
+
+### Progressive UI Updates
+
+```jsx
+import { useEffect, useState } from 'react';
+
+function StreamingText({ text, onComplete }) {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    if (!text) return;
+
+    let currentIndex = 0;
+    const interval = setInterval(() => {
+      if (currentIndex < text.length) {
+        setDisplayedText(text.slice(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        clearInterval(interval);
+        setIsComplete(true);
+        onComplete?.();
+      }
+    }, 50); // Adjust typing speed
+
+    return () => clearInterval(interval);
+  }, [text, onComplete]);
+
+  return (
+    <span className="text-gray-800">
+      {displayedText}
+      {!isComplete && (
+        <span className="animate-pulse text-gray-400">|</span>
+      )}
+    </span>
+  );
+}
+```
+
+### Chunk Processing Pipeline
+
+```javascript
+class StreamProcessor {
+  constructor() {
+    this.callbacks = {
+      onChunk: [],
+      onSentence: [],
+      onComplete: []
+    };
+    this.accumulatedContent = '';
+    this.currentSentence = '';
+    this.sentences = [];
+  }
+
+  addEventListener(event, callback) {
+    if (this.callbacks[event]) {
+      this.callbacks[event].push(callback);
+    }
+  }
+
+  processChunk(content) {
+    this.accumulatedContent += content;
+
+    // Trigger chunk callbacks
+    this.callbacks.onChunk.forEach(callback => callback(content));
+
+    // Check for sentence boundaries
+    const sentenceEndings = ['.', '!', '?', '\n'];
+    if (sentenceEndings.some(end => content.includes(end))) {
+      this.processSentences();
+    }
+  }
+
+  processSentences() {
+    let remaining = this.accumulatedContent;
+    const sentences = [];
+
+    while (true) {
+      const match = remaining.match(/^(.+?[\.\!\?\n])(.*)$/s);
+      if (!match) break;
+
+      sentences.push(match[1].trim());
+      remaining = match[2];
+    }
+
+    sentences.forEach(sentence => {
+      this.sentences.push(sentence);
+      this.callbacks.onSentence.forEach(callback => callback(sentence));
+    });
+
+    this.accumulatedContent = remaining;
+  }
+
+  complete() {
+    if (this.accumulatedContent.trim()) {
+      this.sentences.push(this.accumulatedContent.trim());
+      this.callbacks.onSentence.forEach(callback =>
+        callback(this.accumulatedContent.trim())
+      );
+    }
+
+    this.callbacks.onComplete.forEach(callback =>
+      callback(this.sentences, this.accumulatedContent)
+    );
+  }
+}
+```
+
+### Context-Aware Streaming
+
+```javascript
+class ContextStreamingManager {
+  constructor() {
+    this.activeStreams = new Map();
+    this.contextMemory = new Map();
+  }
+
+  async startContextStream(sessionId, messages, options = {}) {
+    const processor = new StreamProcessor();
+    this.activeStreams.set(sessionId, processor);
+
+    // Load conversation context
+    const context = this.contextMemory.get(sessionId) || {
+      topics: [],
+      sentiment: 'neutral',
+      lastInteraction: null
+    };
+
+    // Set up context-aware callbacks
+    processor.addEventListener('onSentence', (sentence) => {
+      this.analyzeAndUpdateContext(sessionId, sentence, context);
+    });
+
+    processor.addEventListener('onComplete', () => {
+      this.contextMemory.set(sessionId, context);
+    });
+
+    // Start streaming
+    const stream = ai.chatStream({
+      messages: this.enhanceMessagesWithContext(messages, context),
+      ...options
+    });
+
+    for await (const chunk of stream) {
+      if (chunk.choices[0].delta.content) {
+        processor.processChunk(chunk.choices[0].delta.content);
+      }
+    }
+
+    processor.complete();
+    this.activeStreams.delete(sessionId);
+  }
+
+  enhanceMessagesWithContext(messages, context) {
+    const systemPrompt = this.generateContextPrompt(context);
+    return [
+      { role: 'system', content: systemPrompt },
+      ...messages
+    ];
+  }
+
+  generateContextPrompt(context) {
+    let prompt = 'You are a helpful AI assistant.';
+
+    if (context.topics.length > 0) {
+      prompt += ` The user has been discussing: ${context.topics.join(', ')}.`;
+    }
+
+    if (context.sentiment !== 'neutral') {
+      prompt += ` The conversation has a ${context.sentiment} tone.`;
+    }
+
+    if (context.lastInteraction) {
+      const timeAgo = Date.now() - context.lastInteraction;
+      if (timeAgo < 3600000) { // Less than 1 hour
+        prompt += ' This is a continuation of a recent conversation.';
+      }
+    }
+
+    return prompt;
+  }
+
+  analyzeAndUpdateContext(sessionId, sentence, context) {
+    // Simple topic analysis
+    const topics = this.extractTopics(sentence);
+    context.topics.push(...topics);
+    context.topics = [...new Set(context.topics)]; // Remove duplicates
+
+    // Sentiment analysis (simplified)
+    const sentiment = this.analyzeSentiment(sentence);
+    if (sentiment !== 'neutral') {
+      context.sentiment = sentiment;
+    }
+
+    context.lastInteraction = Date.now();
+  }
+
+  extractTopics(sentence) {
+    const topicKeywords = {
+      programming: ['code', 'function', 'api', 'javascript', 'python'],
+      design: ['ui', 'ux', 'design', 'interface', 'layout'],
+      business: ['marketing', 'sales', 'business', 'revenue'],
+      science: ['research', 'study', 'experiment', 'data']
+    };
+
+    const topics = [];
+    const lowerSentence = sentence.toLowerCase();
+
+    Object.entries(topicKeywords).forEach(([topic, keywords]) => {
+      if (keywords.some(keyword => lowerSentence.includes(keyword))) {
+        topics.push(topic);
+      }
+    });
+
+    return topics;
+  }
+
+  analyzeSentiment(sentence) {
+    const positiveWords = ['great', 'excellent', 'amazing', 'love', 'wonderful'];
+    const negativeWords = ['terrible', 'awful', 'hate', 'bad', 'disappointed'];
+
+    const lowerSentence = sentence.toLowerCase();
+    const positiveCount = positiveWords.filter(word => lowerSentence.includes(word)).length;
+    const negativeCount = negativeWords.filter(word => lowerSentence.includes(word)).length;
+
+    if (positiveCount > negativeCount) return 'positive';
+    if (negativeCount > positiveCount) return 'negative';
+    return 'neutral';
+  }
+}
+```
+
+## Error Handling & Recovery
+
+### Robust Streaming Client
+
+```javascript
+class RobustStreamingClient {
+  constructor(apiKey, options = {}) {
+    this.apiKey = apiKey;
+    this.ai = new SundayPyjamasAI({ apiKey });
+    this.maxRetries = options.maxRetries || 3;
+    this.retryDelay = options.retryDelay || 1000;
+    this.onError = options.onError || console.error;
+    this.onReconnect = options.onReconnect || (() => {});
+  }
+
+  async streamWithRetry(messages, options = {}) {
+    let attempt = 0;
+    let lastError;
+
+    while (attempt < this.maxRetries) {
+      try {
+        return await this.startStream(messages, options);
+      } catch (error) {
+        attempt++;
+        lastError = error;
+
+        this.onError(error, attempt);
+
+        if (this.isRetryableError(error) && attempt < this.maxRetries) {
+          const delay = this.retryDelay * Math.pow(2, attempt - 1);
+          await this.sleep(delay);
+          this.onReconnect(attempt);
+          continue;
+        }
+
+        break;
+      }
+    }
+
+    throw lastError;
+  }
+
+  async startStream(messages, options = {}) {
+    const abortController = options.abortController || new AbortController();
+    const stream = this.ai.chatStream(messages, {
+      ...options,
+      signal: abortController.signal
+    });
+
+    return {
+      stream,
+      abortController,
+      [Symbol.asyncIterator]: () => stream
+    };
+  }
+
+  isRetryableError(error) {
+    const retryableCodes = [429, 500, 502, 503, 504];
+    return error.status && retryableCodes.includes(error.status);
+  }
+
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+```
+
+### Connection Management
+
+```javascript
+class StreamConnectionManager {
+  constructor() {
+    this.connections = new Map();
+    this.connectionHealth = new Map();
+    this.maxConnections = 10;
+  }
+
+  async acquireConnection(endpoint) {
+    if (this.connections.size >= this.maxConnections) {
+      throw new Error('Max connections exceeded');
+    }
+
+    const connectionId = `conn_${Date.now()}_${Math.random()}`;
+    const connection = await this.createConnection(endpoint);
+
+    this.connections.set(connectionId, connection);
+    this.connectionHealth.set(connectionId, {
+      status: 'healthy',
+      lastUsed: Date.now(),
+      errorCount: 0
+    });
+
+    return connectionId;
+  }
+
+  async createConnection(endpoint) {
+    // Implement connection creation logic
+    // This could be WebSocket, Server-Sent Events, or HTTP streaming
+    return {
+      endpoint,
+      send: (data) => this.sendData(endpoint, data),
+      close: () => this.closeConnection(endpoint)
+    };
+  }
+
+  async sendData(endpoint, data) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  closeConnection(endpoint) {
+    // Clean up connection resources
+  }
+
+  async releaseConnection(connectionId) {
+    const connection = this.connections.get(connectionId);
+    if (connection) {
+      await connection.close();
+      this.connections.delete(connectionId);
+      this.connectionHealth.delete(connectionId);
+    }
+  }
+
+  getConnectionHealth(connectionId) {
+    return this.connectionHealth.get(connectionId);
+  }
+
+  async cleanupStaleConnections(maxAge = 300000) { // 5 minutes
+    const now = Date.now();
+    const staleConnections = [];
+
+    for (const [connectionId, health] of this.connectionHealth) {
+      if (now - health.lastUsed > maxAge) {
+        staleConnections.push(connectionId);
+      }
+    }
+
+    for (const connectionId of staleConnections) {
+      await this.releaseConnection(connectionId);
+    }
+  }
+}
+```
+
+## Performance Optimization
+
+### Stream Batching
+
+```javascript
+class StreamBatcher {
+  constructor(batchSize = 5, flushInterval = 1000) {
+    this.batchSize = batchSize;
+    this.flushInterval = flushInterval;
+    this.batches = new Map();
+    this.timers = new Map();
+  }
+
+  async addToBatch(streamId, data) {
+    if (!this.batches.has(streamId)) {
+      this.batches.set(streamId, []);
+    }
+
+    const batch = this.batches.get(streamId);
+    batch.push(data);
+
+    if (batch.length >= this.batchSize) {
+      await this.flushBatch(streamId);
+    } else {
+      this.setFlushTimer(streamId);
+    }
+  }
+
+  setFlushTimer(streamId) {
+    if (this.timers.has(streamId)) {
+      clearTimeout(this.timers.get(streamId));
+    }
+
+    const timer = setTimeout(async () => {
+      await this.flushBatch(streamId);
+    }, this.flushInterval);
+
+    this.timers.set(streamId, timer);
+  }
+
+  async flushBatch(streamId) {
+    const batch = this.batches.get(streamId);
+    if (!batch || batch.length === 0) return;
+
+    try {
+      await this.processBatch(streamId, batch);
+
+      // Clear batch and timer
+      this.batches.delete(streamId);
+      if (this.timers.has(streamId)) {
+        clearTimeout(this.timers.get(streamId));
+        this.timers.delete(streamId);
+      }
+    } catch (error) {
+      console.error(`Failed to flush batch for stream ${streamId}:`, error);
+    }
+  }
+
+  async processBatch(streamId, batch) {
+    // Implement batch processing logic
+    // This could involve sending to a queue, database, or processing service
+    console.log(`Processing batch for stream ${streamId}:`, batch.length, 'items');
+  }
+}
+```
+
+### Adaptive Streaming
+
+```javascript
+class AdaptiveStreamer {
+  constructor() {
+    this.networkConditions = {
+      latency: 0,
+      bandwidth: 0,
+      packetLoss: 0
+    };
+    this.streamQuality = 'high';
+    this.qualityCheckInterval = 5000;
+  }
+
+  startAdaptiveStreaming(streamId, messages) {
+    this.monitorNetworkConditions(streamId);
+    return this.startStream(streamId, messages, {
+      quality: this.streamQuality
+    });
+  }
+
+  monitorNetworkConditions(streamId) {
+    setInterval(async () => {
+      const conditions = await this.measureNetworkConditions();
+      this.networkConditions = conditions;
+      this.adjustStreamQuality(streamId);
+    }, this.qualityCheckInterval);
+  }
+
+  async measureNetworkConditions() {
+    const startTime = Date.now();
+
+    try {
+      const response = await fetch('/api/ping');
+      const latency = Date.now() - startTime;
+
+      // Simulate bandwidth and packet loss measurement
+      const bandwidth = 1000 - (latency / 10); // Simulated calculation
+      const packetLoss = Math.max(0, (latency - 100) / 1000); // Simulated calculation
+
+      return {
+        latency,
+        bandwidth: Math.max(0, bandwidth),
+        packetLoss: Math.min(1, packetLoss)
+      };
+    } catch (error) {
+      return {
+        latency: Infinity,
+        bandwidth: 0,
+        packetLoss: 1
+      };
+    }
+  }
+
+  adjustStreamQuality(streamId) {
+    const { latency, bandwidth, packetLoss } = this.networkConditions;
+
+    if (latency > 1000 || packetLoss > 0.05) {
+      this.streamQuality = 'low';
+    } else if (latency > 500 || bandwidth < 500) {
+      this.streamQuality = 'medium';
+    } else {
+      this.streamQuality = 'high';
+    }
+
+    console.log(`Stream ${streamId} quality adjusted to: ${this.streamQuality}`);
+  }
+}
+```
+
+## Best Practices
+
+### Performance
+- Use appropriate chunk sizes (typically 10-50 characters)
+- Implement connection pooling for high-traffic applications
+- Monitor stream health and implement reconnection logic
+- Use compression for large data transfers
+
+### Reliability
+- Implement exponential backoff for retries
+- Handle network interruptions gracefully
+- Provide fallback mechanisms for failed streams
+- Monitor stream metrics and set up alerts
+
+### User Experience
+- Show progress indicators during streaming
+- Allow users to pause/resume streams
+- Provide clear error messages and recovery options
+- Implement smooth loading states
+
+### Resource Management
+- Properly close stream connections
+- Implement garbage collection for stream objects
+- Monitor memory usage during streaming
+- Use streaming libraries with built-in memory management
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title="Stream Connection Drops">
+- Check network connectivity and stability
+- Implement reconnection logic with exponential backoff
+- Monitor server capacity and scale as needed
+- Use connection pooling to manage resources
+</Accordion>
+
+<Accordion title="High Latency Streaming">
+- Optimize server response times
+- Use CDN for global distribution
+- Implement stream compression
+- Reduce chunk sizes for faster transmission
+</Accordion>
+
+<Accordion title="Memory Leaks">
+- Properly close stream connections
+- Implement proper garbage collection
+- Check for circular references
+- Use streaming for large responses
+</Accordion>
+
+<Accordion title="Inconsistent Stream Quality">
+- Implement adaptive streaming based on network conditions
+- Monitor network quality metrics
+- Provide quality fallback options
+- Test across different network conditions
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title: "Error Handling"
+    icon: "triangle-exclamation"
+    href: "/sdks/javascript/error-handling"
+  >
+    Learn comprehensive error handling patterns
+  </Card>
+  <Card
+    title: "Batch Processing"
+    icon: "list"
+    href: "/guides/advanced/batch-processing"
+  >
+    Process multiple requests efficiently
+  </Card>
+  <Card
+    title: "Performance Guide"
+    icon: "bolt"
+    href: "/guides/advanced/optimization"
+  >
+    Advanced optimization techniques
+  </Card>
+  <Card
+    title: "Examples"
+    icon: "code"
+    href: "/examples/javascript"
+  >
+    See complete streaming examples
+  </Card>
+</CardGroup>

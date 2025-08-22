@@ -1,0 +1,840 @@
+---
+title: "Next.js Integration Guide"
+description: "Complete guide to integrating SundayPyjamas AI Suite with Next.js applications"
+---
+
+## Overview
+
+This guide shows you how to integrate SundayPyjamas AI Suite into your Next.js applications. You'll learn how to set up the API client, implement streaming responses, handle authentication, and optimize for performance.
+
+## Prerequisites
+
+- Next.js 13+ (App Router recommended)
+- Node.js 18+
+- SundayPyjamas AI Suite account and API key
+
+## Installation & Setup
+
+### 1. Install Dependencies
+
+```bash
+npm install @sundaypyjamas/ai-sdk
+# or
+yarn add @sundaypyjamas/ai-sdk
+# or
+pnpm add @sundaypyjamas/ai-sdk
+```
+
+### 2. Environment Configuration
+
+Create `.env.local`:
+
+```env
+NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY=spj_ai_your_api_key_here
+```
+
+For server-side usage, use:
+
+```env
+SUNDAYPYJAMAS_API_KEY=spj_ai_your_api_key_here
+```
+
+### 3. API Client Setup
+
+Create `lib/sundaypyjamas.js`:
+
+```javascript
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+export const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY,
+});
+
+// For client-side usage with public key
+export const clientAI = new SundayPyjamasAI({
+  apiKey: process.env.NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY,
+});
+```
+
+## Basic Implementation
+
+### 1. Server-Side API Route
+
+Create `app/api/chat/route.js`:
+
+```javascript
+import { ai } from '../../../lib/sundaypyjamas';
+import { NextResponse } from 'next/server';
+
+export async function POST(request) {
+  try {
+    const { messages, options = {} } = await request.json();
+
+    const response = await ai.chat({
+      messages,
+      model: options.model || 'llama-3.3-70b-versatile',
+      temperature: options.temperature || 0.7,
+      max_tokens: options.maxTokens || 1000,
+    });
+
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error('Chat API error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### 2. Client-Side Hook
+
+Create `hooks/useChat.js`:
+
+```javascript
+import { useState, useCallback } from 'react';
+
+export function useChat() {
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const sendMessage = useCallback(async (content, options = {}) => {
+    setIsLoading(true);
+    setError(null);
+
+    const userMessage = { role: 'user', content };
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: newMessages,
+          options,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      const data = await response.json();
+      const assistantMessage = {
+        role: 'assistant',
+        content: data.choices[0].message.content
+      };
+
+      setMessages([...newMessages, assistantMessage]);
+    } catch (err) {
+      setError(err.message);
+      setMessages(messages); // Remove the user message on error
+    } finally {
+      setIsLoading(false);
+    }
+  }, [messages]);
+
+  const clearMessages = useCallback(() => {
+    setMessages([]);
+    setError(null);
+  }, []);
+
+  return {
+    messages,
+    isLoading,
+    error,
+    sendMessage,
+    clearMessages,
+  };
+}
+```
+
+### 3. Chat Component
+
+Create `components/Chat.jsx`:
+
+```jsx
+'use client';
+
+import { useState } from 'react';
+import { Send, Loader2 } from 'lucide-react';
+import { useChat } from '../hooks/useChat';
+
+export default function Chat() {
+  const { messages, isLoading, error, sendMessage } = useChat();
+  const [input, setInput] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (input.trim() && !isLoading) {
+      sendMessage(input.trim());
+      setInput('');
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-96 border rounded-lg">
+      {/* Messages */}
+      <div className="flex-1 p-4 overflow-y-auto space-y-4">
+        {messages.length === 0 && (
+          <div className="text-center text-gray-500 mt-8">
+            Start a conversation with your AI assistant!
+          </div>
+        )}
+
+        {messages.map((message, index) => (
+          <div
+            key={index}
+            className={`flex ${
+              message.role === 'user' ? 'justify-end' : 'justify-start'
+            }`}
+          >
+            <div
+              className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                message.role === 'user'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-900'
+              }`}
+            >
+              {message.content}
+            </div>
+          </div>
+        ))}
+
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-gray-200 px-4 py-2 rounded-lg">
+              <Loader2 className="w-4 h-4 animate-spin" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="px-4 py-2 bg-red-100 border-t border-red-200">
+          <p className="text-red-700 text-sm">{error}</p>
+        </div>
+      )}
+
+      {/* Input */}
+      <form onSubmit={handleSubmit} className="p-4 border-t">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type your message..."
+            disabled={isLoading}
+            className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={isLoading || !input.trim()}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+```
+
+## Advanced Features
+
+### 1. Streaming Responses
+
+Create `app/api/chat/stream/route.js`:
+
+```javascript
+import { ai } from '../../../../lib/sundaypyjamas';
+import { NextResponse } from 'next/server';
+
+export async function POST(request) {
+  try {
+    const { messages } = await request.json();
+
+    const stream = await ai.chatStream({
+      messages,
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.7,
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+  } catch (error) {
+    console.error('Streaming error:', error);
+    return NextResponse.json(
+      { error: 'Streaming failed' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+Create `hooks/useStreamingChat.js`:
+
+```javascript
+import { useState, useCallback, useRef } from 'react';
+
+export function useStreamingChat() {
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const abortControllerRef = useRef(null);
+
+  const sendMessage = useCallback(async (content) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    setIsLoading(true);
+    setError(null);
+
+    const userMessage = { role: 'user', content };
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+
+    try {
+      const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: newMessages,
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to start stream');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      let accumulatedContent = '';
+      const assistantMessage = { role: 'assistant', content: '' };
+      setMessages([...newMessages, assistantMessage]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') return;
+
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices[0]?.delta?.content;
+              if (content) {
+                accumulatedContent += content;
+                setMessages([...newMessages, {
+                  role: 'assistant',
+                  content: accumulatedContent
+                }]);
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        setError(err.message);
+        setMessages(messages);
+      }
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
+  }, [messages]);
+
+  const stopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
+
+  return {
+    messages,
+    isLoading,
+    error,
+    sendMessage,
+    stopGeneration,
+  };
+}
+```
+
+### 2. Middleware for Authentication
+
+Create `middleware.js`:
+
+```javascript
+import { NextResponse } from 'next/server';
+import { verifyToken } from './lib/auth';
+
+export function middleware(request) {
+  // Protect API routes
+  if (request.nextUrl.pathname.startsWith('/api/chat')) {
+    const token = request.cookies.get('auth-token')?.value;
+
+    if (!token || !verifyToken(token)) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: '/api/chat/:path*',
+};
+```
+
+### 3. Error Handling & Retry Logic
+
+Create `lib/retry.js`:
+
+```javascript
+export async function withRetry(fn, maxAttempts = 3, delay = 1000) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+
+      // Check if error is retryable
+      if (error.status === 429 || error.status >= 500) {
+        await new Promise(resolve => setTimeout(resolve, delay * attempt));
+        continue;
+      }
+
+      // Don't retry for client errors
+      throw error;
+    }
+  }
+}
+```
+
+Update your API route:
+
+```javascript
+import { withRetry } from '../../../lib/retry';
+
+export async function POST(request) {
+  try {
+    const result = await withRetry(async () => {
+      const { messages } = await request.json();
+
+      return await ai.chat({
+        messages,
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.7,
+      });
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('Chat API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to process request' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### 4. Caching & Optimization
+
+Create `lib/cache.js`:
+
+```javascript
+import { LRUCache } from 'lru-cache';
+
+const cache = new LRUCache({
+  max: 100, // Maximum number of items
+  ttl: 1000 * 60 * 5, // 5 minutes TTL
+});
+
+export function getCacheKey(messages) {
+  // Create a deterministic cache key from messages
+  return JSON.stringify(messages.map(msg => ({
+    role: msg.role,
+    content: msg.content.slice(0, 100) // Limit content length
+  })));
+}
+
+export function getCachedResponse(key) {
+  return cache.get(key);
+}
+
+export function setCachedResponse(key, response) {
+  cache.set(key, response);
+}
+```
+
+Update your API route with caching:
+
+```javascript
+import { getCacheKey, getCachedResponse, setCachedResponse } from '../../../lib/cache';
+
+export async function POST(request) {
+  try {
+    const { messages } = await request.json();
+    const cacheKey = getCacheKey(messages);
+
+    // Check cache first
+    const cached = getCachedResponse(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
+    const result = await withRetry(async () => {
+      return await ai.chat({
+        messages,
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.7,
+      });
+    });
+
+    // Cache the result
+    setCachedResponse(cacheKey, result);
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('Chat API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to process request' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+## Production Deployment
+
+### 1. Environment Variables
+
+```env
+# Production environment variables
+SUNDAYPYJAMAS_API_KEY=spj_ai_your_production_key_here
+NEXT_PUBLIC_APP_URL=https://yourdomain.com
+```
+
+### 2. Build Optimization
+
+Update `next.config.js`:
+
+```javascript
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // Enable SWC minifier for better performance
+  swcMinify: true,
+
+  // Optimize images
+  images: {
+    domains: ['your-domain.com'],
+  },
+
+  // Enable compression
+  compress: true,
+
+  // API route optimization
+  experimental: {
+    serverComponentsExternalPackages: ['@sundaypyjamas/ai-sdk'],
+  },
+};
+
+module.exports = nextConfig;
+```
+
+### 3. Monitoring & Logging
+
+Create `lib/monitoring.js`:
+
+```javascript
+export function logAPIUsage(endpoint, duration, success, error = null) {
+  const logData = {
+    timestamp: new Date().toISOString(),
+    endpoint,
+    duration,
+    success,
+    error: error?.message,
+    userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'server',
+  };
+
+  // In production, send to your logging service
+  console.log('API Usage:', logData);
+
+  // Example: Send to external service
+  if (process.env.NODE_ENV === 'production') {
+    fetch('/api/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(logData),
+    }).catch(console.error);
+  }
+}
+```
+
+Update your API route:
+
+```javascript
+import { logAPIUsage } from '../../../lib/monitoring';
+
+export async function POST(request) {
+  const startTime = Date.now();
+
+  try {
+    const { messages } = await request.json();
+    const cacheKey = getCacheKey(messages);
+
+    const cached = getCachedResponse(cacheKey);
+    if (cached) {
+      logAPIUsage('/api/chat', Date.now() - startTime, true);
+      return NextResponse.json(cached);
+    }
+
+    const result = await withRetry(async () => {
+      return await ai.chat({
+        messages,
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.7,
+      });
+    });
+
+    setCachedResponse(cacheKey, result);
+    logAPIUsage('/api/chat', Date.now() - startTime, true);
+
+    return NextResponse.json(result);
+  } catch (error) {
+    logAPIUsage('/api/chat', Date.now() - startTime, false, error);
+    console.error('Chat API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to process request' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+## Common Patterns
+
+### 1. Chat with File Upload
+
+Create `app/api/chat-with-files/route.js`:
+
+```javascript
+import { ai } from '../../../lib/sundaypyjamas';
+
+export async function POST(request) {
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file');
+    const message = formData.get('message');
+
+    if (!file || !message) {
+      return NextResponse.json(
+        { error: 'File and message are required' },
+        { status: 400 }
+      );
+    }
+
+    // Read file content
+    const fileContent = await file.text();
+
+    // Create enhanced prompt
+    const enhancedMessage = `
+User message: ${message}
+
+File content (${file.name}):
+${fileContent}
+
+Please analyze this file and respond to the user's request.
+`;
+
+    const response = await ai.chat({
+      messages: [
+        { role: 'user', content: enhancedMessage }
+      ],
+    });
+
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error('Chat with files error:', error);
+    return NextResponse.json(
+      { error: 'Failed to process file' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### 2. Real-time Collaboration
+
+Create `lib/realtime.js`:
+
+```javascript
+import { useEffect, useRef } from 'react';
+
+export function useRealtimeChat(roomId, onMessage) {
+  const wsRef = useRef(null);
+
+  useEffect(() => {
+    // Connect to WebSocket
+    wsRef.current = new WebSocket(`wss://your-websocket-server.com/room/${roomId}`);
+
+    wsRef.current.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      onMessage(data);
+    };
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [roomId, onMessage]);
+
+  const sendMessage = (message) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(message));
+    }
+  };
+
+  return { sendMessage };
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title="API Key Not Working">
+- Verify your API key is correctly set in environment variables
+- Check that you're using the correct environment variable name
+- Ensure the API key has the necessary permissions
+- Test with a simple curl request to verify the key
+</Accordion>
+
+<Accordion title="Streaming Not Working">
+- Check that your Next.js version supports streaming
+- Verify the streaming API endpoint is correctly implemented
+- Test the streaming endpoint directly with curl
+- Check browser console for JavaScript errors
+</Accordion>
+
+<Accordion title="Build Errors">
+- Ensure all dependencies are properly installed
+- Check for TypeScript errors if using TypeScript
+- Verify your Node.js version compatibility
+- Clear Next.js cache with `rm -rf .next`
+</Accordion>
+
+<Accordion title="Performance Issues">
+- Implement proper caching strategies
+- Use appropriate error boundaries
+- Optimize bundle size by code splitting
+- Monitor API usage and implement rate limiting
+</Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+### Security
+- Never expose API keys in client-side code
+- Use environment variables for sensitive data
+- Implement proper authentication and authorization
+- Validate and sanitize all inputs
+
+### Performance
+- Implement caching for frequently accessed data
+- Use streaming for better user experience
+- Optimize bundle size and loading times
+- Monitor and log API usage
+
+### User Experience
+- Provide loading states and error handling
+- Implement proper error boundaries
+- Add retry mechanisms for failed requests
+- Provide clear feedback for user actions
+
+### Code Organization
+- Separate API logic from UI components
+- Use custom hooks for reusable logic
+- Implement proper error handling at all levels
+- Keep components focused and single-purpose
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="FastAPI Integration"
+    icon="code"
+    href="/guides/integrations/fastapi"
+  >
+    Learn how to integrate with Python FastAPI applications.
+  </Card>
+  <Card
+    title="Vercel Deployment"
+    icon="cloud"
+    href="/platform/deployment/vercel"
+  >
+    Deploy your Next.js app with SundayPyjamas AI Suite.
+  </Card>
+  <Card
+    title="Streaming Patterns"
+    icon="bolt"
+    href="/guides/advanced/streaming-patterns"
+  >
+    Master advanced streaming techniques and patterns.
+  </Card>
+  <Card
+    title="Error Handling"
+    icon="triangle-exclamation"
+    href="/errors"
+  >
+    Implement comprehensive error handling strategies.
+  </Card>
+</CardGroup>
+
+<Note>
+Next.js provides an excellent foundation for building AI-powered applications with SundayPyjamas AI Suite. The combination of server-side rendering, API routes, and React's component model makes it ideal for creating responsive, scalable AI applications.
+</Note>

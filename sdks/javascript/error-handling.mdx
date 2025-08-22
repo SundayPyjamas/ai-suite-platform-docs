@@ -1,0 +1,969 @@
+---
+title: "JavaScript SDK - Error Handling"
+description: "Comprehensive error handling and debugging guide for the JavaScript SDK"
+---
+
+## Overview
+
+Robust error handling is essential for building reliable AI applications. This guide covers error types, handling strategies, debugging techniques, and best practices for the JavaScript SDK.
+
+## Error Types
+
+### API Errors
+
+```javascript
+// Common API error structure
+{
+  "error": {
+    "code": "rate_limit_exceeded",
+    "message": "Rate limit exceeded. Please try again later.",
+    "type": "rate_limit_error",
+    "param": null,
+    "status": 429
+  }
+}
+```
+
+#### Rate Limit Errors
+```javascript
+// Error: 429 Too Many Requests
+{
+  "error": {
+    "code": "rate_limit_exceeded",
+    "message": "Rate limit exceeded. Please try again in 60 seconds.",
+    "type": "rate_limit_error",
+    "status": 429
+  }
+}
+```
+
+#### Authentication Errors
+```javascript
+// Error: 401 Unauthorized
+{
+  "error": {
+    "code": "invalid_api_key",
+    "message": "Incorrect API key provided",
+    "type": "authentication_error",
+    "status": 401
+  }
+}
+```
+
+#### Model Errors
+```javascript
+// Error: 400 Bad Request
+{
+  "error": {
+    "code": "model_not_found",
+    "message": "The model 'invalid-model' does not exist",
+    "type": "invalid_request_error",
+    "status": 400
+  }
+}
+```
+
+#### Content Policy Errors
+```javascript
+// Error: 400 Bad Request
+{
+  "error": {
+    "code": "content_policy_violation",
+    "message": "Your request violates our content policy",
+    "type": "content_policy_error",
+    "status": 400
+  }
+}
+```
+
+## Basic Error Handling
+
+### Try-Catch Blocks
+
+```javascript
+import { SundayPyjamasAI } from '@sundaypyjamas/ai-sdk';
+
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY
+});
+
+async function basicErrorHandling() {
+  try {
+    const response = await ai.chat({
+      messages: [{ role: 'user', content: 'Hello!' }],
+      model: 'llama-3.3-70b-versatile'
+    });
+
+    console.log('Success:', response.choices[0].message.content);
+    return response;
+
+  } catch (error) {
+    console.error('Error occurred:', error.message);
+
+    // Handle specific error types
+    if (error.status === 401) {
+      console.error('Invalid API key');
+    } else if (error.status === 429) {
+      console.error('Rate limit exceeded');
+    } else if (error.status >= 500) {
+      console.error('Server error');
+    }
+
+    throw error;
+  }
+}
+```
+
+### Global Error Handler
+
+```javascript
+// Set up global error handling
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY,
+  onError: (error, context) => {
+    console.error('AI SDK Error:', error);
+    console.error('Context:', context);
+
+    // Send to error reporting service
+    reportError(error, context);
+
+    // Log to analytics
+    trackError(error.code, error.status);
+  }
+});
+```
+
+## Advanced Error Handling Patterns
+
+### Retry Logic with Exponential Backoff
+
+```javascript
+class RetryHandler {
+  constructor(maxRetries = 3, baseDelay = 1000) {
+    this.maxRetries = maxRetries;
+    this.baseDelay = baseDelay;
+  }
+
+  async withRetry(fn) {
+    let lastError;
+
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error;
+
+        if (attempt === this.maxRetries || !this.isRetryableError(error)) {
+          throw error;
+        }
+
+        const delay = this.calculateDelay(attempt);
+        console.log(`Attempt ${attempt} failed, retrying in ${delay}ms`);
+        await this.sleep(delay);
+      }
+    }
+
+    throw lastError;
+  }
+
+  isRetryableError(error) {
+    // Retry on network errors and server errors
+    const retryableStatuses = [429, 500, 502, 503, 504];
+    const retryableCodes = ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND'];
+
+    return (error.status && retryableStatuses.includes(error.status)) ||
+           (error.code && retryableCodes.includes(error.code));
+  }
+
+  calculateDelay(attempt) {
+    // Exponential backoff with jitter
+    const exponentialDelay = this.baseDelay * Math.pow(2, attempt - 1);
+    const jitter = Math.random() * 1000; // Up to 1 second jitter
+    return Math.min(exponentialDelay + jitter, 30000); // Max 30 seconds
+  }
+
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+// Usage
+const retryHandler = new RetryHandler();
+
+async function robustChat() {
+  return await retryHandler.withRetry(async () => {
+    return await ai.chat({
+      messages: [{ role: 'user', content: 'Hello!' }]
+    });
+  });
+}
+```
+
+### Circuit Breaker Pattern
+
+```javascript
+class CircuitBreaker {
+  constructor(failureThreshold = 5, timeout = 60000) {
+    this.failureThreshold = failureThreshold;
+    this.timeout = timeout;
+    this.failureCount = 0;
+    this.lastFailureTime = null;
+    this.state = 'closed'; // closed, open, half-open
+  }
+
+  async execute(fn) {
+    if (this.state === 'open') {
+      if (this.shouldAttemptReset()) {
+        this.state = 'half-open';
+      } else {
+        throw new Error('Circuit breaker is open');
+      }
+    }
+
+    try {
+      const result = await fn();
+      this.onSuccess();
+      return result;
+    } catch (error) {
+      this.onFailure();
+      throw error;
+    }
+  }
+
+  shouldAttemptReset() {
+    return this.lastFailureTime &&
+           Date.now() - this.lastFailureTime > this.timeout;
+  }
+
+  onSuccess() {
+    this.failureCount = 0;
+    this.state = 'closed';
+  }
+
+  onFailure() {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+
+    if (this.failureCount >= this.failureThreshold) {
+      this.state = 'open';
+    }
+  }
+
+  getState() {
+    return {
+      state: this.state,
+      failureCount: this.failureCount,
+      lastFailure: this.lastFailureTime
+    };
+  }
+}
+
+// Usage
+const circuitBreaker = new CircuitBreaker();
+
+async function protectedChat() {
+  return await circuitBreaker.execute(async () => {
+    return await ai.chat({
+      messages: [{ role: 'user', content: 'Hello!' }]
+    });
+  });
+}
+```
+
+### Fallback Strategies
+
+```javascript
+class FallbackHandler {
+  constructor(fallbacks = []) {
+    this.fallbacks = fallbacks;
+  }
+
+  async executeWithFallback(primaryFn) {
+    try {
+      return await primaryFn();
+    } catch (error) {
+      console.warn('Primary function failed:', error.message);
+
+      for (const fallback of this.fallbacks) {
+        try {
+          console.log(`Trying fallback: ${fallback.name}`);
+          return await fallback.fn(error);
+        } catch (fallbackError) {
+          console.warn(`Fallback ${fallback.name} failed:`, fallbackError.message);
+        }
+      }
+
+      throw error;
+    }
+  }
+}
+
+// Usage
+const fallbackHandler = new FallbackHandler([
+  {
+    name: 'Retry with different model',
+    fn: async (originalError) => {
+      return await ai.chat({
+        messages: [{ role: 'user', content: 'Hello!' }],
+        model: 'llama-3.3-70b-versatile' // Fallback model
+      });
+    }
+  },
+  {
+    name: 'Return cached response',
+    fn: async (originalError) => {
+      return await getCachedResponse('greeting');
+    }
+  },
+  {
+    name: 'Return static response',
+    fn: async (originalError) => {
+      return {
+        choices: [{
+          message: {
+            role: 'assistant',
+            content: 'Hello! I\'m currently experiencing some issues, but I\'ll be back soon!'
+          }
+        }]
+      };
+    }
+  }
+]);
+
+async function resilientChat() {
+  return await fallbackHandler.executeWithFallback(async () => {
+    return await ai.chat({
+      messages: [{ role: 'user', content: 'Hello!' }],
+      model: 'llama-3.3-70b-code' // Primary model
+    });
+  });
+}
+```
+
+## Error Monitoring & Logging
+
+### Structured Logging
+
+```javascript
+class ErrorLogger {
+  constructor(service = 'ai-sdk') {
+    this.service = service;
+  }
+
+  logError(error, context = {}) {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      service: this.service,
+      level: 'error',
+      error: {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        stack: error.stack
+      },
+      context
+    };
+
+    // Log to console
+    console.error(JSON.stringify(logEntry, null, 2));
+
+    // Send to logging service
+    this.sendToLoggingService(logEntry);
+
+    // Track metrics
+    this.trackErrorMetrics(error);
+  }
+
+  logWarning(message, context = {}) {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      service: this.service,
+      level: 'warning',
+      message,
+      context
+    };
+
+    console.warn(JSON.stringify(logEntry, null, 2));
+    this.sendToLoggingService(logEntry);
+  }
+
+  async sendToLoggingService(logEntry) {
+    try {
+      // Example: Send to external logging service
+      await fetch('/api/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(logEntry)
+      });
+    } catch (error) {
+      console.error('Failed to send log to service:', error);
+    }
+  }
+
+  trackErrorMetrics(error) {
+    // Track error metrics for monitoring
+    const metric = {
+      error_type: error.name,
+      error_code: error.code,
+      status_code: error.status,
+      timestamp: Date.now()
+    };
+
+    // Send to metrics service
+    this.sendMetrics(metric);
+  }
+
+  sendMetrics(metric) {
+    // Implementation for metrics tracking
+    console.log('Metrics:', metric);
+  }
+}
+
+// Usage
+const errorLogger = new ErrorLogger();
+
+try {
+  await ai.chat({ messages: [{ role: 'user', content: 'Hello!' }] });
+} catch (error) {
+  errorLogger.logError(error, {
+    userId: '123',
+    sessionId: 'abc',
+    endpoint: '/chat'
+  });
+}
+```
+
+### Error Tracking & Analytics
+
+```javascript
+class ErrorTracker {
+  constructor() {
+    this.errorCounts = new Map();
+    this.errorHistory = [];
+    this.maxHistorySize = 1000;
+  }
+
+  trackError(error, context = {}) {
+    const errorKey = `${error.name}:${error.code || 'unknown'}`;
+
+    // Count errors
+    const count = this.errorCounts.get(errorKey) || 0;
+    this.errorCounts.set(errorKey, count + 1);
+
+    // Store in history
+    const errorEntry = {
+      timestamp: Date.now(),
+      error: {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        status: error.status
+      },
+      context,
+      stack: error.stack
+    };
+
+    this.errorHistory.push(errorEntry);
+
+    if (this.errorHistory.length > this.maxHistorySize) {
+      this.errorHistory.shift();
+    }
+  }
+
+  getErrorStats() {
+    return {
+      totalErrors: this.errorHistory.length,
+      errorCounts: Object.fromEntries(this.errorCounts),
+      recentErrors: this.errorHistory.slice(-10),
+      topErrors: Array.from(this.errorCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+    };
+  }
+
+  getErrorRate(timeWindowMs = 3600000) { // 1 hour
+    const now = Date.now();
+    const windowStart = now - timeWindowMs;
+
+    const recentErrors = this.errorHistory.filter(
+      entry => entry.timestamp > windowStart
+    );
+
+    return recentErrors.length / (timeWindowMs / 1000); // errors per second
+  }
+
+  clearHistory() {
+    this.errorHistory = [];
+    this.errorCounts.clear();
+  }
+}
+
+// Usage
+const errorTracker = new ErrorTracker();
+
+try {
+  await ai.chat({ messages: [{ role: 'user', content: 'Hello!' }] });
+} catch (error) {
+  errorTracker.trackError(error, {
+    userId: '123',
+    model: 'llama-3.3-70b-versatile'
+  });
+
+  // Check error rate
+  const errorRate = errorTracker.getErrorRate();
+  if (errorRate > 0.1) { // More than 0.1 errors per second
+    console.warn('High error rate detected:', errorRate);
+  }
+}
+```
+
+## React Error Boundaries
+
+### Basic Error Boundary
+
+```jsx
+import React from 'react';
+
+class AIErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    // Log error details
+    console.error('AI Error Boundary caught an error:', error, errorInfo);
+
+    // Send to error reporting service
+    reportError(error, {
+      component: 'AIErrorBoundary',
+      errorInfo
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-boundary">
+          <h3>Something went wrong with the AI</h3>
+          <p>{this.state.error.message}</p>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Usage
+function AIChat() {
+  return (
+    <AIErrorBoundary>
+      <StreamingChatComponent />
+    </AIErrorBoundary>
+  );
+}
+```
+
+### Advanced Error Boundary with Retry
+
+```jsx
+import React from 'react';
+
+class RetryableErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      retryCount: 0
+    };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    const { retryCount } = this.state;
+    const { maxRetries = 3 } = this.props;
+
+    console.error('Error Boundary:', error, errorInfo);
+
+    if (retryCount < maxRetries) {
+      // Attempt retry after a delay
+      setTimeout(() => {
+        this.setState(prevState => ({
+          hasError: false,
+          error: null,
+          retryCount: prevState.retryCount + 1
+        }));
+      }, 1000 * retryCount); // Progressive delay
+    }
+  }
+
+  render() {
+    const { hasError, error, retryCount } = this.state;
+    const { maxRetries = 3 } = this.props;
+
+    if (hasError) {
+      if (retryCount < maxRetries) {
+        return (
+          <div className="retrying">
+            <p>Retrying... (Attempt {retryCount + 1}/{maxRetries})</p>
+            <div className="spinner"></div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="error-fallback">
+          <h3>Unable to load AI Chat</h3>
+          <p>Error: {error.message}</p>
+          <button
+            onClick={() => window.location.reload()}
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Usage
+function App() {
+  return (
+    <RetryableErrorBoundary maxRetries={3}>
+      <AIChatComponent />
+    </RetryableErrorBoundary>
+  );
+}
+```
+
+## Debugging Techniques
+
+### Debug Mode
+
+```javascript
+// Enable debug mode
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY,
+  debug: true
+});
+
+// Or enable for specific requests
+const response = await ai.chat({
+  messages: [{ role: 'user', content: 'Hello!' }],
+  debug: true
+});
+```
+
+### Request/Response Interceptors
+
+```javascript
+class RequestInterceptor {
+  constructor() {
+    this.interceptors = {
+      request: [],
+      response: [],
+      error: []
+    };
+  }
+
+  addRequestInterceptor(interceptor) {
+    this.interceptors.request.push(interceptor);
+  }
+
+  addResponseInterceptor(interceptor) {
+    this.interceptors.response.push(interceptor);
+  }
+
+  addErrorInterceptor(interceptor) {
+    this.interceptors.error.push(interceptor);
+  }
+
+  async interceptRequest(config) {
+    let modifiedConfig = config;
+
+    for (const interceptor of this.interceptors.request) {
+      modifiedConfig = await interceptor(modifiedConfig);
+    }
+
+    return modifiedConfig;
+  }
+
+  async interceptResponse(response) {
+    let modifiedResponse = response;
+
+    for (const interceptor of this.interceptors.response) {
+      modifiedResponse = await interceptor(modifiedResponse);
+    }
+
+    return modifiedResponse;
+  }
+
+  async interceptError(error) {
+    let modifiedError = error;
+
+    for (const interceptor of this.interceptors.error) {
+      modifiedError = await interceptor(modifiedError);
+    }
+
+    return modifiedError;
+  }
+}
+
+// Usage
+const interceptor = new RequestInterceptor();
+
+// Log all requests
+interceptor.addRequestInterceptor(async (config) => {
+  console.log('Request:', config);
+  return config;
+});
+
+// Log all responses
+interceptor.addResponseInterceptor(async (response) => {
+  console.log('Response:', response);
+  return response;
+});
+
+// Handle errors
+interceptor.addErrorInterceptor(async (error) => {
+  console.error('Error:', error);
+  return error;
+});
+```
+
+### Performance Debugging
+
+```javascript
+class PerformanceDebugger {
+  constructor() {
+    this.timingData = new Map();
+  }
+
+  startTiming(label) {
+    this.timingData.set(label, {
+      start: performance.now(),
+      end: null,
+      duration: null
+    });
+  }
+
+  endTiming(label) {
+    const timing = this.timingData.get(label);
+    if (timing) {
+      timing.end = performance.now();
+      timing.duration = timing.end - timing.start;
+      console.log(`${label}: ${timing.duration.toFixed(2)}ms`);
+    }
+  }
+
+  getTimingReport() {
+    const report = {};
+    for (const [label, timing] of this.timingData) {
+      report[label] = timing.duration;
+    }
+    return report;
+  }
+
+  clearTimings() {
+    this.timingData.clear();
+  }
+}
+
+// Usage
+const debugger = new PerformanceDebugger();
+
+async function debugChat() {
+  debugger.startTiming('total_request');
+
+  try {
+    debugger.startTiming('api_call');
+    const response = await ai.chat({
+      messages: [{ role: 'user', content: 'Hello!' }]
+    });
+    debugger.endTiming('api_call');
+
+    debugger.startTiming('processing');
+    // Process response
+    const processed = processResponse(response);
+    debugger.endTiming('processing');
+
+    debugger.endTiming('total_request');
+
+    console.log('Performance Report:', debugger.getTimingReport());
+    return processed;
+
+  } catch (error) {
+    debugger.endTiming('total_request');
+    console.error('Error with timing:', debugger.getTimingReport());
+    throw error;
+  }
+}
+```
+
+## Best Practices
+
+### Error Prevention
+- Validate input data before making requests
+- Use TypeScript for better error catching
+- Implement proper input sanitization
+- Set appropriate timeouts
+- Monitor API usage and limits
+
+### Error Recovery
+- Implement graceful degradation
+- Provide fallback responses
+- Use retry logic with exponential backoff
+- Implement circuit breakers
+- Log errors for analysis
+
+### User Experience
+- Show loading states during retries
+- Provide clear error messages
+- Allow users to retry failed requests
+- Implement progressive enhancement
+- Use error boundaries in React applications
+
+### Monitoring & Alerting
+- Track error rates and types
+- Set up alerts for critical errors
+- Monitor API health and performance
+- Log errors with sufficient context
+- Create dashboards for error analysis
+
+## Common Error Scenarios
+
+### Rate Limiting
+```javascript
+// Handle rate limit errors
+async function handleRateLimit() {
+  try {
+    const response = await ai.chat({
+      messages: [{ role: 'user', content: 'Hello!' }]
+    });
+    return response;
+  } catch (error) {
+    if (error.status === 429) {
+      const retryAfter = error.headers?.['retry-after'] || 60;
+      console.log(`Rate limited, retrying after ${retryAfter} seconds`);
+
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+      return await handleRateLimit(); // Retry
+    }
+    throw error;
+  }
+}
+```
+
+### Network Issues
+```javascript
+// Handle network connectivity issues
+async function resilientRequest() {
+  const maxRetries = 3;
+  let attempt = 0;
+
+  while (attempt < maxRetries) {
+    try {
+      return await ai.chat({
+        messages: [{ role: 'user', content: 'Hello!' }]
+      });
+    } catch (error) {
+      attempt++;
+
+      if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+        if (attempt < maxRetries) {
+          console.log(`Network error, retrying attempt ${attempt}`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          continue;
+        }
+      }
+
+      throw error;
+    }
+  }
+}
+```
+
+### Invalid Requests
+```javascript
+// Handle validation errors
+async function validateAndChat(messages) {
+  // Validate messages
+  if (!Array.isArray(messages) || messages.length === 0) {
+    throw new Error('Messages must be a non-empty array');
+  }
+
+  for (const message of messages) {
+    if (!message.role || !message.content) {
+      throw new Error('Each message must have role and content');
+    }
+
+    if (!['user', 'assistant', 'system'].includes(message.role)) {
+      throw new Error('Invalid message role');
+    }
+
+    if (typeof message.content !== 'string' || message.content.trim().length === 0) {
+      throw new Error('Message content must be a non-empty string');
+    }
+  }
+
+  try {
+    return await ai.chat({ messages });
+  } catch (error) {
+    if (error.status === 400) {
+      console.error('Invalid request:', error.message);
+      throw new Error('Please check your input and try again');
+    }
+    throw error;
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title: "Streaming Guide"
+    icon: "bolt"
+    href: "/sdks/javascript/streaming"
+  >
+    Learn advanced streaming techniques
+  </Card>
+  <Card
+    title: "Performance Guide"
+    icon: "gauge-high"
+    href: "/guides/advanced/optimization"
+  >
+    Optimize your applications
+  </Card>
+  <Card
+    title: "Examples"
+    icon: "code"
+    href: "/examples/javascript"
+  >
+    See complete error handling examples
+  </Card>
+  <Card
+    title: "Monitoring"
+    icon: "chart-line"
+    href: "/platform/monitoring/datadog"
+  >
+    Set up error monitoring
+  </Card>
+</CardGroup>

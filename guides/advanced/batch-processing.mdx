@@ -1,0 +1,1094 @@
+---
+title: "Batch Processing Guide"
+description: "Efficiently process multiple AI requests with batch processing techniques"
+---
+
+## Overview
+
+Batch processing is essential for scaling AI applications efficiently. This guide covers strategies for processing multiple requests, managing queues, and optimizing resource usage with SundayPyjamas AI Suite.
+
+## Why Batch Processing Matters
+
+- **Cost Efficiency**: Reduced API overhead through request batching
+- **Performance**: Parallel processing of multiple requests
+- **Resource Management**: Better utilization of rate limits and quotas
+- **Scalability**: Handle large volumes of requests efficiently
+- **Reliability**: Built-in retry mechanisms and error recovery
+
+## Basic Batch Processing
+
+### 1. Simple Request Batching
+
+```javascript
+// Basic batch processing implementation
+class BatchProcessor {
+  constructor(apiKey, batchSize = 5, delay = 1000) {
+    this.apiKey = apiKey;
+    this.batchSize = batchSize;
+    this.delay = delay;
+    this.queue = [];
+    this.processing = false;
+  }
+
+  async addToQueue(request) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({
+        request,
+        resolve,
+        reject,
+        timestamp: Date.now()
+      });
+
+      this.processQueue();
+    });
+  }
+
+  async processQueue() {
+    if (this.processing || this.queue.length < this.batchSize) {
+      return;
+    }
+
+    this.processing = true;
+
+    try {
+      const batch = this.queue.splice(0, this.batchSize);
+      const results = await this.processBatch(batch);
+
+      // Resolve promises with results
+      batch.forEach((item, index) => {
+        item.resolve(results[index]);
+      });
+
+    } catch (error) {
+      // Reject all promises in batch
+      this.queue.splice(0, this.batchSize).forEach(item => {
+        item.reject(error);
+      });
+    }
+
+    this.processing = false;
+
+    // Continue processing if queue has items
+    if (this.queue.length > 0) {
+      setTimeout(() => this.processQueue(), this.delay);
+    }
+  }
+
+  async processBatch(batch) {
+    // Process batch requests
+    const promises = batch.map(item =>
+      this.makeAPIRequest(item.request)
+    );
+
+    return await Promise.all(promises);
+  }
+
+  async makeAPIRequest(request) {
+    const response = await fetch('https://suite.sundaypyjamas.com/api/v1/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request)
+    });
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+}
+
+// Usage example
+const batchProcessor = new BatchProcessor(process.env.SUNDAYPYJAMAS_API_KEY);
+
+const requests = [
+  { messages: [{ role: 'user', content: 'Hello!' }] },
+  { messages: [{ role: 'user', content: 'How are you?' }] },
+  { messages: [{ role: 'user', content: 'Tell me a joke.' }] }
+];
+
+const results = await Promise.all(
+  requests.map(req => batchProcessor.addToQueue(req))
+);
+```
+
+### 2. Smart Batching with Content Analysis
+
+```javascript
+// Intelligent batch processing based on content similarity
+class SmartBatchProcessor extends BatchProcessor {
+  constructor(apiKey, options = {}) {
+    super(apiKey, options.batchSize, options.delay);
+    this.similarityThreshold = options.similarityThreshold || 0.7;
+    this.maxWaitTime = options.maxWaitTime || 5000;
+  }
+
+  async addToQueue(request) {
+    const promise = super.addToQueue(request);
+
+    // Set timeout for max wait time
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Request timeout'));
+      }, this.maxWaitTime);
+    });
+
+    return Promise.race([promise, timeoutPromise]);
+  }
+
+  async processQueue() {
+    if (this.processing) return;
+
+    // Group similar requests
+    const groups = this.groupSimilarRequests();
+
+    for (const group of groups) {
+      await this.processBatchGroup(group);
+      await this.delay(this.delay);
+    }
+  }
+
+  groupSimilarRequests() {
+    const groups = [];
+
+    this.queue.forEach(item => {
+      let addedToGroup = false;
+
+      for (const group of groups) {
+        if (this.areRequestsSimilar(item.request, group[0].request)) {
+          group.push(item);
+          addedToGroup = true;
+          break;
+        }
+      }
+
+      if (!addedToGroup) {
+        groups.push([item]);
+      }
+    });
+
+    return groups;
+  }
+
+  areRequestsSimilar(req1, req2) {
+    // Simple similarity check based on message content
+    const content1 = req1.messages[0]?.content || '';
+    const content2 = req2.messages[0]?.content || '';
+
+    // Calculate Jaccard similarity
+    const set1 = new Set(content1.toLowerCase().split(/\s+/));
+    const set2 = new Set(content2.toLowerCase().split(/\s+/));
+
+    const intersection = new Set([...set1].filter(x => set2.has(x)));
+    const union = new Set([...set1, ...set2]);
+
+    return intersection.size / union.size >= this.similarityThreshold;
+  }
+
+  async processBatchGroup(group) {
+    if (group.length <= 1) {
+      // Process single request normally
+      const item = group[0];
+      try {
+        const result = await this.makeAPIRequest(item.request);
+        item.resolve(result);
+      } catch (error) {
+        item.reject(error);
+      }
+      return;
+    }
+
+    // Process batch
+    const batch = group.splice(0, this.batchSize);
+    try {
+      const results = await this.processBatch(batch);
+      batch.forEach((item, index) => {
+        item.resolve(results[index]);
+      });
+    } catch (error) {
+      batch.forEach(item => item.reject(error));
+    }
+  }
+}
+```
+
+## Advanced Batch Processing Patterns
+
+### 1. Priority Queue System
+
+```javascript
+// Priority-based batch processing
+class PriorityBatchProcessor extends BatchProcessor {
+  constructor(apiKey, options = {}) {
+    super(apiKey, options.batchSize, options.delay);
+    this.queues = {
+      high: [],
+      medium: [],
+      low: []
+    };
+    this.processingPriority = 'high';
+  }
+
+  async addToQueue(request, priority = 'medium') {
+    return new Promise((resolve, reject) => {
+      const queueItem = {
+        request,
+        resolve,
+        reject,
+        timestamp: Date.now(),
+        priority
+      };
+
+      this.queues[priority].push(queueItem);
+      this.processQueue();
+    });
+  }
+
+  async processQueue() {
+    if (this.processing) return;
+
+    // Determine which priority to process
+    const priority = this.getNextPriorityToProcess();
+    if (!priority) return;
+
+    this.processing = true;
+    this.processingPriority = priority;
+
+    try {
+      const queue = this.queues[priority];
+      const batchSize = Math.min(this.batchSize, queue.length);
+      const batch = queue.splice(0, batchSize);
+
+      const results = await this.processBatch(batch);
+
+      // Resolve promises
+      batch.forEach((item, index) => {
+        item.resolve(results[index]);
+      });
+
+    } catch (error) {
+      // Handle batch error
+      const queue = this.queues[this.processingPriority];
+      queue.splice(0, this.batchSize).forEach(item => {
+        item.reject(error);
+      });
+    }
+
+    this.processing = false;
+    this.processingPriority = null;
+
+    // Continue processing
+    setTimeout(() => this.processQueue(), this.delay);
+  }
+
+  getNextPriorityToProcess() {
+    const priorities = ['high', 'medium', 'low'];
+
+    for (const priority of priorities) {
+      if (this.queues[priority].length > 0) {
+        return priority;
+      }
+    }
+
+    return null;
+  }
+
+  getQueueStats() {
+    return {
+      high: this.queues.high.length,
+      medium: this.queues.medium.length,
+      low: this.queues.low.length,
+      total: this.queues.high.length + this.queues.medium.length + this.queues.low.length
+    };
+  }
+}
+
+// Usage with priority
+const processor = new PriorityBatchProcessor(apiKey);
+
+const urgentRequest = await processor.addToQueue(
+  { messages: [{ role: 'user', content: 'Urgent request!' }] },
+  'high'
+);
+
+const normalRequest = await processor.addToQueue(
+  { messages: [{ role: 'user', content: 'Normal request' }] },
+  'medium'
+);
+```
+
+### 2. Adaptive Batch Sizing
+
+```javascript
+// Dynamic batch size adjustment based on performance
+class AdaptiveBatchProcessor extends BatchProcessor {
+  constructor(apiKey, options = {}) {
+    super(apiKey, options.batchSize, options.delay);
+    this.performanceHistory = [];
+    this.historySize = options.historySize || 10;
+    this.targetResponseTime = options.targetResponseTime || 2000;
+  }
+
+  async processBatch(batch) {
+    const startTime = Date.now();
+    const results = await super.processBatch(batch);
+    const processingTime = Date.now() - startTime;
+
+    // Record performance metrics
+    this.recordPerformance(batch.length, processingTime);
+
+    // Adjust batch size based on performance
+    this.adjustBatchSize();
+
+    return results;
+  }
+
+  recordPerformance(batchSize, processingTime) {
+    this.performanceHistory.push({
+      batchSize,
+      processingTime,
+      timestamp: Date.now()
+    });
+
+    // Keep only recent history
+    if (this.performanceHistory.length > this.historySize) {
+      this.performanceHistory.shift();
+    }
+  }
+
+  adjustBatchSize() {
+    if (this.performanceHistory.length < 3) return;
+
+    const recent = this.performanceHistory.slice(-3);
+    const avgResponseTime = recent.reduce((sum, item) =>
+      sum + item.processingTime, 0
+    ) / recent.length;
+
+    if (avgResponseTime > this.targetResponseTime && this.batchSize > 1) {
+      // Reduce batch size for better performance
+      this.batchSize = Math.max(1, this.batchSize - 1);
+    } else if (avgResponseTime < this.targetResponseTime * 0.7) {
+      // Increase batch size if performing well
+      this.batchSize = Math.min(10, this.batchSize + 1);
+    }
+  }
+
+  getPerformanceStats() {
+    if (this.performanceHistory.length === 0) return null;
+
+    const avgBatchSize = this.performanceHistory.reduce((sum, item) =>
+      sum + item.batchSize, 0
+    ) / this.performanceHistory.length;
+
+    const avgResponseTime = this.performanceHistory.reduce((sum, item) =>
+      sum + item.processingTime, 0
+    ) / this.performanceHistory.length;
+
+    return {
+      averageBatchSize: Math.round(avgBatchSize * 100) / 100,
+      averageResponseTime: Math.round(avgResponseTime),
+      currentBatchSize: this.batchSize,
+      historySize: this.performanceHistory.length
+    };
+  }
+}
+```
+
+### 3. Retry and Error Recovery
+
+```javascript
+// Robust batch processing with retry logic
+class ResilientBatchProcessor extends BatchProcessor {
+  constructor(apiKey, options = {}) {
+    super(apiKey, options.batchSize, options.delay);
+    this.maxRetries = options.maxRetries || 3;
+    this.retryDelay = options.retryDelay || 1000;
+    this.circuitBreaker = new CircuitBreaker();
+  }
+
+  async processBatch(batch) {
+    if (this.circuitBreaker.isOpen()) {
+      throw new Error('Circuit breaker is open');
+    }
+
+    let attempt = 0;
+    let lastError;
+
+    while (attempt < this.maxRetries) {
+      try {
+        const results = await this.makeBatchRequest(batch);
+        this.circuitBreaker.recordSuccess();
+        return results;
+
+      } catch (error) {
+        attempt++;
+        lastError = error;
+
+        if (this.isRetryableError(error)) {
+          this.circuitBreaker.recordFailure();
+
+          if (attempt < this.maxRetries) {
+            await this.delay(this.retryDelay * attempt);
+            continue;
+          }
+        }
+
+        throw error;
+      }
+    }
+
+    throw lastError;
+  }
+
+  isRetryableError(error) {
+    // Network errors, 5xx errors are retryable
+    const retryableStatuses = [429, 500, 502, 503, 504];
+    return error.status && retryableStatuses.includes(error.status);
+  }
+
+  async makeBatchRequest(batch) {
+    // Implement individual request fallback
+    const results = [];
+    const errors = [];
+
+    for (const item of batch) {
+      try {
+        const result = await this.makeAPIRequest(item.request);
+        results.push(result);
+      } catch (error) {
+        errors.push({ item, error });
+        results.push(null); // Placeholder for failed request
+      }
+    }
+
+    // Handle partial failures
+    if (errors.length > 0) {
+      console.warn(`${errors.length} requests failed in batch`);
+
+      // Retry failed requests individually
+      for (const { item, error } of errors) {
+        try {
+          const result = await this.retryIndividualRequest(item);
+          const index = batch.indexOf(item);
+          results[index] = result;
+        } catch (retryError) {
+          // Keep original error if retry fails
+        }
+      }
+    }
+
+    return results;
+  }
+
+  async retryIndividualRequest(item) {
+    let attempt = 0;
+
+    while (attempt < this.maxRetries) {
+      try {
+        return await this.makeAPIRequest(item.request);
+      } catch (error) {
+        attempt++;
+        if (attempt >= this.maxRetries || !this.isRetryableError(error)) {
+          throw error;
+        }
+        await this.delay(this.retryDelay * attempt);
+      }
+    }
+  }
+}
+
+// Circuit breaker implementation
+class CircuitBreaker {
+  constructor(failureThreshold = 5, timeout = 30000) {
+    this.failureThreshold = failureThreshold;
+    this.timeout = timeout;
+    this.failureCount = 0;
+    this.lastFailureTime = null;
+    this.state = 'closed'; // closed, open, half-open
+  }
+
+  recordSuccess() {
+    this.failureCount = 0;
+    this.state = 'closed';
+  }
+
+  recordFailure() {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+
+    if (this.failureCount >= this.failureThreshold) {
+      this.state = 'open';
+    }
+  }
+
+  isOpen() {
+    if (this.state === 'closed') return false;
+    if (this.state === 'open') {
+      if (Date.now() - this.lastFailureTime >= this.timeout) {
+        this.state = 'half-open';
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+}
+```
+
+### 4. Batch Processing with Rate Limiting
+
+```javascript
+// Rate-limited batch processing
+class RateLimitedBatchProcessor extends BatchProcessor {
+  constructor(apiKey, options = {}) {
+    super(apiKey, options.batchSize, options.delay);
+    this.rateLimiter = new RateLimiter({
+      requestsPerSecond: options.requestsPerSecond || 10,
+      burstLimit: options.burstLimit || 20
+    });
+  }
+
+  async processBatch(batch) {
+    // Check rate limit before processing
+    const canProcess = await this.rateLimiter.checkLimit(batch.length);
+
+    if (!canProcess) {
+      // Queue batch for later processing
+      this.queue.unshift(...batch);
+      await this.delay(1000); // Wait before retry
+      return this.processQueue();
+    }
+
+    try {
+      const results = await super.processBatch(batch);
+      this.rateLimiter.recordSuccess(batch.length);
+      return results;
+    } catch (error) {
+      this.rateLimiter.recordFailure(batch.length);
+      throw error;
+    }
+  }
+}
+
+// Token bucket rate limiter
+class RateLimiter {
+  constructor(options = {}) {
+    this.requestsPerSecond = options.requestsPerSecond;
+    this.burstLimit = options.burstLimit;
+    this.tokens = options.burstLimit;
+    this.lastRefill = Date.now();
+    this.refillRate = this.requestsPerSecond / 1000; // tokens per millisecond
+  }
+
+  async checkLimit(requestCount) {
+    this.refillTokens();
+
+    if (this.tokens >= requestCount) {
+      this.tokens -= requestCount;
+      return true;
+    }
+
+    return false;
+  }
+
+  refillTokens() {
+    const now = Date.now();
+    const timePassed = now - this.lastRefill;
+    const tokensToAdd = timePassed * this.refillRate;
+
+    this.tokens = Math.min(this.burstLimit, this.tokens + tokensToAdd);
+    this.lastRefill = now;
+  }
+
+  recordSuccess(count) {
+    // Success - tokens already consumed
+  }
+
+  recordFailure(count) {
+    // Refund tokens on failure
+    this.tokens = Math.min(this.burstLimit, this.tokens + count);
+  }
+
+  getStats() {
+    this.refillTokens();
+    return {
+      availableTokens: Math.floor(this.tokens),
+      burstLimit: this.burstLimit,
+      requestsPerSecond: this.requestsPerSecond
+    };
+  }
+}
+```
+
+## Real-World Use Cases
+
+### 1. Content Generation Pipeline
+
+```javascript
+// Batch content generation for marketing campaigns
+class ContentGenerationPipeline {
+  constructor(processor) {
+    this.processor = processor;
+    this.templates = {
+      headlines: [
+        'Discover the Secret to [TOPIC]',
+        'The Ultimate Guide to [TOPIC]',
+        'Why [TOPIC] is the Future'
+      ],
+      descriptions: [
+        'Learn everything about [TOPIC] in this comprehensive guide.',
+        'Master [TOPIC] with our expert tips and strategies.',
+        'Transform your understanding of [TOPIC] today.'
+      ]
+    };
+  }
+
+  async generateCampaignContent(topics, campaignType = 'blog') {
+    const requests = [];
+
+    for (const topic of topics) {
+      // Generate headlines
+      for (const template of this.templates.headlines) {
+        const headline = template.replace('[TOPIC]', topic);
+        requests.push({
+          type: 'headline',
+          topic,
+          content: headline,
+          priority: 'high'
+        });
+      }
+
+      // Generate descriptions
+      for (const template of this.templates.descriptions) {
+        const description = template.replace('[TOPIC]', topic);
+        requests.push({
+          type: 'description',
+          topic,
+          content: description,
+          priority: 'medium'
+        });
+      }
+
+      // Generate full articles
+      requests.push({
+        type: 'article',
+        topic,
+        content: `Write a comprehensive ${campaignType} post about ${topic}`,
+        priority: 'low'
+      });
+    }
+
+    // Process in batches with priority
+    const results = await Promise.all(
+      requests.map(req =>
+        this.processor.addToQueue(
+          {
+            messages: [
+              { role: 'user', content: req.content }
+            ]
+          },
+          req.priority
+        )
+      )
+    );
+
+    return this.organizeResults(results, requests);
+  }
+
+  organizeResults(results, requests) {
+    const organized = {
+      headlines: [],
+      descriptions: [],
+      articles: []
+    };
+
+    results.forEach((result, index) => {
+      const request = requests[index];
+      organized[request.type].push({
+        topic: request.topic,
+        content: result.choices[0].message.content,
+        original: request.content
+      });
+    });
+
+    return organized;
+  }
+}
+
+// Usage
+const pipeline = new ContentGenerationPipeline(processor);
+const campaignContent = await pipeline.generateCampaignContent([
+  'Artificial Intelligence',
+  'Machine Learning',
+  'Data Science'
+]);
+```
+
+### 2. Code Review Automation
+
+```javascript
+// Batch code review and analysis
+class CodeReviewProcessor {
+  constructor(processor) {
+    this.processor = processor;
+  }
+
+  async reviewCodebase(files, reviewTypes = ['security', 'performance', 'quality']) {
+    const requests = [];
+
+    for (const file of files) {
+      for (const reviewType of reviewTypes) {
+        requests.push({
+          type: 'review',
+          file: file.path,
+          content: this.generateReviewPrompt(file.content, reviewType),
+          priority: reviewType === 'security' ? 'high' : 'medium'
+        });
+      }
+    }
+
+    const results = await Promise.all(
+      requests.map(req =>
+        this.processor.addToQueue(
+          {
+            messages: [
+              { role: 'user', content: req.content }
+            ]
+          },
+          req.priority
+        )
+      )
+    );
+
+    return this.organizeReviews(results, requests);
+  }
+
+  generateReviewPrompt(code, reviewType) {
+    const prompts = {
+      security: `Review this code for security vulnerabilities:\n\n${code}`,
+      performance: `Analyze this code for performance issues:\n\n${code}`,
+      quality: `Review code quality and suggest improvements:\n\n${code}`
+    };
+
+    return prompts[reviewType] || prompts.quality;
+  }
+
+  organizeReviews(results, requests) {
+    const reviews = {};
+
+    results.forEach((result, index) => {
+      const request = requests[index];
+      const file = request.file;
+
+      if (!reviews[file]) {
+        reviews[file] = {};
+      }
+
+      reviews[file][request.type] = result.choices[0].message.content;
+    });
+
+    return reviews;
+  }
+}
+
+// Usage
+const codeFiles = [
+  { path: 'auth.js', content: '...' },
+  { path: 'database.py', content: '...' }
+];
+
+const reviews = await codeReviewProcessor.reviewCodebase(codeFiles);
+```
+
+### 3. Data Processing Pipeline
+
+```javascript
+// Batch data analysis and processing
+class DataAnalysisPipeline {
+  constructor(processor) {
+    this.processor = processor;
+  }
+
+  async analyzeDataset(data, analysisTypes = ['summary', 'trends', 'insights']) {
+    const requests = [];
+
+    for (const analysisType of analysisTypes) {
+      requests.push({
+        type: analysisType,
+        content: this.generateAnalysisPrompt(data, analysisType),
+        priority: analysisType === 'summary' ? 'high' : 'medium'
+      });
+    }
+
+    const results = await Promise.all(
+      requests.map(req =>
+        this.processor.addToQueue(
+          {
+            messages: [
+              { role: 'user', content: req.content }
+            ]
+          },
+          req.priority
+        )
+      )
+    );
+
+    return this.compileAnalysisReport(results, requests);
+  }
+
+  generateAnalysisPrompt(data, analysisType) {
+    const sampleData = JSON.stringify(data.slice(0, 10));
+
+    const prompts = {
+      summary: `Provide a statistical summary of this dataset:\n\n${sampleData}`,
+      trends: `Identify trends and patterns in this data:\n\n${sampleData}`,
+      insights: `Generate insights and recommendations from this data:\n\n${sampleData}`
+    };
+
+    return prompts[analysisType] || prompts.summary;
+  }
+
+  compileAnalysisReport(results, requests) {
+    const report = {
+      summary: null,
+      trends: null,
+      insights: null,
+      generatedAt: new Date().toISOString()
+    };
+
+    results.forEach((result, index) => {
+      const request = requests[index];
+      report[request.type] = result.choices[0].message.content;
+    });
+
+    return report;
+  }
+}
+
+// Usage
+const dataset = [
+  { date: '2024-01-01', value: 100, category: 'A' },
+  { date: '2024-01-02', value: 120, category: 'B' },
+  // ... more data
+];
+
+const analysis = await dataPipeline.analyzeDataset(dataset);
+```
+
+## Monitoring and Optimization
+
+### 1. Batch Processing Metrics
+
+```javascript
+// Monitoring batch processing performance
+class BatchProcessorMonitor {
+  constructor(processor) {
+    this.processor = processor;
+    this.metrics = {
+      totalRequests: 0,
+      totalBatches: 0,
+      averageBatchSize: 0,
+      averageProcessingTime: 0,
+      errorRate: 0,
+      throughput: 0
+    };
+    this.startTime = Date.now();
+  }
+
+  recordBatch(batch, processingTime, results, errors) {
+    this.metrics.totalRequests += batch.length;
+    this.metrics.totalBatches += 1;
+    this.metrics.averageBatchSize =
+      (this.metrics.averageBatchSize + batch.length) / 2;
+
+    this.metrics.averageProcessingTime =
+      (this.metrics.averageProcessingTime + processingTime) / 2;
+
+    const errorCount = errors.length;
+    this.metrics.errorRate =
+      (this.metrics.errorRate + errorCount / batch.length) / 2;
+
+    this.calculateThroughput();
+  }
+
+  calculateThroughput() {
+    const elapsedMinutes = (Date.now() - this.startTime) / (1000 * 60);
+    this.metrics.throughput = this.metrics.totalRequests / elapsedMinutes;
+  }
+
+  getMetrics() {
+    return {
+      ...this.metrics,
+      uptime: Date.now() - this.startTime
+    };
+  }
+
+  generateReport() {
+    const metrics = this.getMetrics();
+    return {
+      summary: {
+        totalRequestsProcessed: metrics.totalRequests,
+        totalBatchesProcessed: metrics.totalBatches,
+        averageBatchSize: Math.round(metrics.averageBatchSize * 100) / 100,
+        averageProcessingTime: Math.round(metrics.averageProcessingTime),
+        errorRate: Math.round(metrics.errorRate * 10000) / 100, // percentage
+        throughput: Math.round(metrics.throughput * 100) / 100 // requests per minute
+      },
+      performance: {
+        isOptimal: metrics.averageBatchSize >= 3 && metrics.errorRate < 0.05,
+        recommendations: this.generateRecommendations(metrics)
+      }
+    };
+  }
+
+  generateRecommendations(metrics) {
+    const recommendations = [];
+
+    if (metrics.averageBatchSize < 2) {
+      recommendations.push('Consider increasing batch size for better efficiency');
+    }
+
+    if (metrics.errorRate > 0.1) {
+      recommendations.push('High error rate detected - review error handling');
+    }
+
+    if (metrics.averageProcessingTime > 5000) {
+      recommendations.push('Processing time is high - consider optimization');
+    }
+
+    return recommendations;
+  }
+}
+
+// Integration with batch processor
+class MonitoredBatchProcessor extends BatchProcessor {
+  constructor(apiKey, options = {}) {
+    super(apiKey, options.batchSize, options.delay);
+    this.monitor = new BatchProcessorMonitor(this);
+  }
+
+  async processBatch(batch) {
+    const startTime = Date.now();
+    const errors = [];
+
+    try {
+      const results = await super.processBatch(batch);
+      return results;
+    } catch (error) {
+      errors.push(error);
+      throw error;
+    } finally {
+      const processingTime = Date.now() - startTime;
+      this.monitor.recordBatch(batch, processingTime, [], errors);
+    }
+  }
+
+  getMetrics() {
+    return this.monitor.getMetrics();
+  }
+
+  getPerformanceReport() {
+    return this.monitor.generateReport();
+  }
+}
+```
+
+## Best Practices
+
+### Performance Optimization
+- **Batch Size**: Find optimal batch size through testing (typically 3-10)
+- **Parallel Processing**: Use appropriate concurrency limits
+- **Resource Management**: Monitor memory and CPU usage
+- **Caching**: Cache frequently requested data
+
+### Error Handling
+- **Retry Logic**: Implement exponential backoff for failed requests
+- **Circuit Breaker**: Prevent cascade failures
+- **Partial Success**: Handle partial batch failures gracefully
+- **Monitoring**: Track error rates and types
+
+### Scalability
+- **Horizontal Scaling**: Add more processors as load increases
+- **Load Balancing**: Distribute requests across multiple instances
+- **Queue Management**: Implement priority queues for critical requests
+- **Resource Limits**: Set appropriate limits to prevent resource exhaustion
+
+### Monitoring
+- **Metrics Collection**: Track throughput, latency, and error rates
+- **Alerting**: Set up alerts for performance degradation
+- **Logging**: Comprehensive logging for debugging and analysis
+- **Dashboards**: Real-time monitoring dashboards
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title="High Error Rates">
+- Check API rate limits and quotas
+- Verify API key permissions
+- Review error handling and retry logic
+- Monitor network connectivity
+</Accordion>
+
+<Accordion title="Slow Processing Times">
+- Optimize batch sizes
+- Check network latency
+- Monitor API response times
+- Review server resources
+</Accordion>
+
+<Accordion title="Memory Issues">
+- Implement proper garbage collection
+- Monitor memory usage
+- Reduce batch sizes if necessary
+- Use streaming for large responses
+</Accordion>
+
+<Accordion title="Rate Limiting">
+- Implement proper rate limiting
+- Use exponential backoff for retries
+- Monitor API usage patterns
+- Consider upgrading rate limits
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Streaming Patterns"
+    icon="bolt"
+    href="/guides/advanced/streaming-patterns"
+  >
+    Combine batch processing with streaming for real-time applications.
+  </Card>
+  <Card
+    title="Rate Limits & Optimization"
+    icon="gauge-high"
+    href="/rate-limits"
+  >
+    Learn to work effectively within rate limits.
+  </Card>
+  <Card
+    title="Monitoring Setup"
+    icon="chart-line"
+    href="/platform/monitoring/datadog"
+  >
+    Set up comprehensive monitoring for batch processing.
+  </Card>
+  <Card
+    title="Scaling Guide"
+    icon="server"
+    href="/guides/advanced/optimization"
+  >
+    Scale batch processing for enterprise workloads.
+  </Card>
+</CardGroup>
+
+<Note>
+Batch processing is a powerful technique for scaling AI applications efficiently. By implementing proper batching strategies, error handling, and monitoring, you can significantly improve performance and reliability while reducing costs.
+</Note>

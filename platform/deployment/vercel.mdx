@@ -1,0 +1,722 @@
+---
+title: "Deploy to Vercel"
+description: "Complete guide to deploying SundayPyjamas AI Suite applications on Vercel"
+---
+
+## Overview
+
+Vercel provides an excellent platform for deploying AI-powered applications with serverless functions, edge network, and built-in optimizations. This guide covers deployment strategies, performance optimization, and best practices.
+
+## Quick Deploy
+
+### One-Click Template
+
+The fastest way to deploy is using our official template:
+
+1. **Visit Template**: [SundayPyjamas AI Suite Template](https://vercel.com/templates/ai/sundaypyjamas-ai-suite)
+2. **Click Deploy**: One-click deployment to your Vercel account
+3. **Configure Environment**: Add your API key
+4. **Deploy**: Live in minutes
+
+### Manual Deployment
+
+#### Prerequisites
+- Vercel account
+- Git repository with your code
+- SundayPyjamas AI Suite API key
+
+#### Step 1: Install Vercel CLI
+```bash
+npm install -g vercel
+vercel login
+```
+
+#### Step 2: Link Project
+```bash
+cd your-project
+vercel link
+```
+
+#### Step 3: Set Environment Variables
+```bash
+vercel env add SUNDAYPYJAMAS_API_KEY
+# Enter: spj_ai_your_api_key_here
+
+# For client-side usage
+vercel env add NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY
+# Enter: spj_ai_your_api_key_here
+```
+
+#### Step 4: Deploy
+```bash
+vercel --prod
+```
+
+## Application Types
+
+### Next.js Applications
+
+#### App Router (Recommended)
+
+```javascript
+// app/api/chat/route.js
+import { NextResponse } from 'next/server';
+
+export async function POST(request) {
+  try {
+    const { messages } = await request.json();
+
+    const response = await fetch('https://suite.sundaypyjamas.com/api/v1/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.SUNDAYPYJAMAS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages,
+        model: 'llama-3.3-70b-versatile',
+      })
+    });
+
+    const data = await response.json();
+    return NextResponse.json(data);
+
+  } catch (error) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+export const config = {
+  runtime: 'edge', // Use Edge Runtime for better performance
+};
+```
+
+#### Pages Router
+
+```javascript
+// pages/api/chat.js
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const { messages } = req.body;
+
+    const response = await fetch('https://suite.sundaypyjamas.com/api/v1/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.SUNDAYPYJAMAS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages,
+        model: 'llama-3.3-70b-versatile',
+      })
+    });
+
+    const data = await response.json();
+    res.status(200).json(data);
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+```
+
+### FastAPI Applications
+
+#### Vercel Configuration
+
+```python
+# api/index.py
+from fastapi import FastAPI
+from app.main import app as fastapi_app
+
+app = fastapi_app
+
+# Vercel expects ASGI app
+def handler(event, context):
+    return app(event, context)
+```
+
+```json
+// vercel.json
+{
+  "functions": {
+    "api/index.py": {
+      "runtime": "@vercel/python"
+    }
+  },
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.py"
+    }
+  ],
+  "env": {
+    "SUNDAYPYJAMAS_API_KEY": "@sundaypyjamas-api-key"
+  }
+}
+```
+
+### React Applications
+
+```jsx
+// components/AIChat.jsx
+import { useState } from 'react';
+
+export default function AIChat() {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    const userMessage = { role: 'user', content: input };
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [...messages, userMessage]
+        })
+      });
+
+      const data = await response.json();
+      const aiMessage = data.choices[0].message;
+      setMessages(prev => [...prev, aiMessage]);
+
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="chat-container">
+      <div className="messages">
+        {messages.map((message, index) => (
+          <div key={index} className={`message ${message.role}`}>
+            <strong>{message.role === 'user' ? 'You' : 'AI'}:</strong>
+            <span>{message.content}</span>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type your message..."
+          disabled={isLoading}
+        />
+        <button type="submit" disabled={isLoading}>
+          {isLoading ? 'Sending...' : 'Send'}
+        </button>
+      </form>
+    </div>
+  );
+}
+```
+
+## Performance Optimization
+
+### Edge Runtime
+
+```javascript
+// Use Edge Runtime for global applications
+export const config = {
+  runtime: 'edge',
+};
+
+// Edge function benefits:
+// - Faster cold starts
+// - Lower latency globally
+// - Better scalability
+```
+
+### Function Optimization
+
+```javascript
+// Optimize function memory and duration
+export const config = {
+  runtime: 'edge',
+  regions: ['iad1', 'sfo1', 'fra1'], // Specify regions
+  maxDuration: 30, // Maximum execution time
+  memory: 1024, // Memory allocation
+};
+```
+
+### Caching Strategies
+
+```javascript
+// Implement response caching
+export async function POST(request) {
+  const { messages } = await request.json();
+  const cacheKey = generateCacheKey(messages);
+
+  // Check cache
+  const cached = await getCachedResponse(cacheKey);
+  if (cached) {
+    return new Response(JSON.stringify(cached), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Generate response
+  const response = await fetch('https://suite.sundaypyjamas.com/api/v1/chat', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.SUNDAYPYJAMAS_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ messages })
+  });
+
+  const data = await response.json();
+
+  // Cache response
+  await setCachedResponse(cacheKey, data, 300); // 5 minutes
+
+  return new Response(JSON.stringify(data), {
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+```
+
+## Environment Management
+
+### Environment Variables
+
+```bash
+# Development
+vercel env add SUNDAYPYJAMAS_API_KEY development
+vercel env add NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY development
+
+# Production
+vercel env add SUNDAYPYJAMAS_API_KEY production
+vercel env add NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY production
+
+# Preview
+vercel env add SUNDAYPYJAMAS_API_KEY preview
+vercel env add NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY preview
+```
+
+### Environment-Specific Configuration
+
+```javascript
+// lib/config.js
+const config = {
+  development: {
+    apiUrl: 'http://localhost:3000',
+    aiModel: 'llama-3.3-70b-versatile',
+    cacheEnabled: false
+  },
+  production: {
+    apiUrl: process.env.VERCEL_URL,
+    aiModel: 'llama-3.3-70b-versatile',
+    cacheEnabled: true
+  },
+  preview: {
+    apiUrl: process.env.VERCEL_URL,
+    aiModel: 'llama-3.3-70b-versatile',
+    cacheEnabled: true
+  }
+};
+
+export const currentConfig = config[process.env.VERCEL_ENV] || config.production;
+```
+
+## Monitoring & Analytics
+
+### Vercel Analytics
+
+```jsx
+// app/layout.js
+import { Analytics } from '@vercel/analytics/react';
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <Analytics />
+      </body>
+    </html>
+  );
+}
+```
+
+### Custom Metrics
+
+```javascript
+// lib/metrics.js
+export function trackAIMetrics(endpoint, duration, success, tokens = null) {
+  // Track AI-specific metrics
+  if (typeof window !== 'undefined' && window.gtag) {
+    window.gtag('event', 'ai_api_call', {
+      event_category: 'ai',
+      event_label: endpoint,
+      value: duration,
+      custom_parameter_1: success ? 'success' : 'error',
+      custom_parameter_2: tokens
+    });
+  }
+}
+
+// Track in API route
+export async function POST(request) {
+  const startTime = Date.now();
+
+  try {
+    // ... API logic
+
+    const duration = Date.now() - startTime;
+    trackAIMetrics('/api/chat', duration, true, response.usage.total_tokens);
+
+    return NextResponse.json(response);
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    trackAIMetrics('/api/chat', duration, false);
+
+    throw error;
+  }
+}
+```
+
+## Security Best Practices
+
+### API Key Management
+
+```javascript
+// Never expose API keys in client-side code
+// ❌ Bad
+const ai = new SundayPyjamasAI({
+  apiKey: 'spj_ai_your_key_here' // Exposed!
+});
+
+// ✅ Good - Use environment variables
+const ai = new SundayPyjamasAI({
+  apiKey: process.env.SUNDAYPYJAMAS_API_KEY
+});
+
+// For browser usage, proxy through your backend
+const response = await fetch('/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ messages })
+});
+```
+
+### Request Validation
+
+```javascript
+// Validate requests before processing
+export async function POST(request) {
+  try {
+    const { messages } = await request.json();
+
+    // Validate messages
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return NextResponse.json(
+        { error: 'Messages must be a non-empty array' },
+        { status: 400 }
+      );
+    }
+
+    // Validate each message
+    for (const message of messages) {
+      if (!message.role || !message.content) {
+        return NextResponse.json(
+          { error: 'Each message must have role and content' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Process valid request
+    // ... rest of logic
+
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Invalid request format' },
+      { status: 400 }
+    );
+  }
+}
+```
+
+### Rate Limiting
+
+```javascript
+// Implement rate limiting
+import { Ratelimit } from '@upstash/ratelimit';
+import { kv } from '@vercel/kv';
+
+const ratelimit = new Ratelimit({
+  redis: kv,
+  limiter: Ratelimit.slidingWindow(10, '1 m'), // 10 requests per minute
+});
+
+export async function POST(request) {
+  const identifier = request.headers.get('x-forwarded-for') || 'anonymous';
+  const { success } = await ratelimit.limit(identifier);
+
+  if (!success) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded' },
+      { status: 429 }
+    );
+  }
+
+  // Process request
+  // ... rest of logic
+}
+```
+
+## Deployment Strategies
+
+### Preview Deployments
+
+```bash
+# Deploy to preview environment
+vercel
+
+# Deploy to production
+vercel --prod
+```
+
+### Branch-based Deployments
+
+```json
+// vercel.json
+{
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "develop": true,
+      "feature/*": false
+    }
+  }
+}
+```
+
+### Environment-specific Builds
+
+```javascript
+// next.config.js
+const config = {
+  // Environment-specific configuration
+  env: {
+    API_URL: process.env.VERCEL_URL || 'http://localhost:3000'
+  },
+
+  // Build optimization
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Client-side optimizations
+      config.optimization.splitChunks.chunks = 'all';
+    }
+    return config;
+  }
+};
+
+module.exports = config;
+```
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title="Deployment Failures">
+- Check build logs in Vercel dashboard
+- Verify all dependencies are installed
+- Ensure environment variables are set correctly
+- Check for syntax errors in code
+- Validate vercel.json configuration
+</Accordion>
+
+<Accordion title="Function Timeout">
+- Increase function timeout in vercel.json
+- Optimize API calls and reduce processing time
+- Use streaming for long-running operations
+- Implement proper error handling
+- Consider using Edge Runtime
+</Accordion>
+
+<Accordion title="Environment Variable Issues">
+- Verify environment variables are set in Vercel dashboard
+- Check variable names match your code
+- Ensure variables are available in correct environment
+- Use vercel env pull to sync local environment
+- Restart functions after changing environment variables
+</Accordion>
+
+<Accordion title="Performance Issues">
+- Use Edge Runtime for better performance
+- Implement proper caching strategies
+- Optimize bundle size
+- Use streaming for better UX
+- Monitor and optimize API usage
+</Accordion>
+</AccordionGroup>
+
+## Advanced Features
+
+### ISR (Incremental Static Regeneration)
+
+```javascript
+// app/blog/[slug]/page.js
+export async function generateStaticParams() {
+  return [
+    { slug: 'getting-started' },
+    { slug: 'advanced-features' },
+  ];
+}
+
+export default function BlogPost({ params }) {
+  return (
+    <div>
+      <h1>Blog Post: {params.slug}</h1>
+      {/* Content will be generated dynamically */}
+    </div>
+  );
+}
+
+// Revalidate every hour
+export const revalidate = 3600;
+```
+
+### Image Optimization
+
+```javascript
+// next.config.js
+module.exports = {
+  images: {
+    domains: ['your-domain.com'],
+    formats: ['image/webp', 'image/avif'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+  }
+};
+
+// Usage
+import Image from 'next/image';
+
+export default function OptimizedImage() {
+  return (
+    <Image
+      src="/ai-generated-image.jpg"
+      alt="AI generated content"
+      width={800}
+      height={600}
+      priority
+      placeholder="blur"
+    />
+  );
+}
+```
+
+### Middleware
+
+```javascript
+// middleware.js
+import { NextResponse } from 'next/server';
+
+export function middleware(request) {
+  // Add security headers
+  const response = NextResponse.next();
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  return response;
+}
+
+export const config = {
+  matcher: '/api/:path*',
+};
+```
+
+## Best Practices
+
+### Performance
+- Use Edge Runtime for global applications
+- Implement proper caching strategies
+- Optimize bundle size and loading times
+- Use streaming for better user experience
+- Monitor and optimize API usage
+
+### Security
+- Never expose API keys in client-side code
+- Use environment variables for sensitive data
+- Implement proper authentication and authorization
+- Keep dependencies updated
+- Monitor for security vulnerabilities
+
+### Development
+- Use preview deployments for testing
+- Implement proper error handling
+- Use TypeScript for better code quality
+- Follow Vercel's best practices
+- Use Vercel CLI for local development
+
+### Cost Optimization
+- Use appropriate function sizes
+- Implement caching to reduce API calls
+- Use streaming to reduce memory usage
+- Monitor usage and set up alerts
+- Optimize images and static assets
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title: "AWS Deployment"
+    icon: "cloud"
+    href: "/platform/deployment/aws"
+  >
+    Deploy to AWS with Lambda and API Gateway
+  </Card>
+  <Card
+    title: "Docker Deployment"
+    icon: "container"
+    href: "/platform/deployment/docker"
+  >
+    Containerize your application
+  </Card>
+  <Card
+    title: "Monitoring Setup"
+    icon: "chart-line"
+    href: "/platform/monitoring/datadog"
+  >
+    Set up comprehensive monitoring
+  </Card>
+  <Card
+    title: "Security Guide"
+    icon: "shield-check"
+    href: "/platform/security/authentication"
+  >
+    Implement security best practices
+  </Card>
+</CardGroup>

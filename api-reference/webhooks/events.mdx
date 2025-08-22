@@ -1,0 +1,716 @@
+---
+title: "Webhook Events Reference"
+description: "Complete reference of all webhook events and their payloads"
+---
+
+## Event Categories
+
+### Chat Events
+
+#### `chat.request.completed`
+
+Triggered when a chat completion request is successfully processed.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567890",
+  "object": "event",
+  "type": "chat.request.completed",
+  "created": 1677832384,
+  "data": {
+    "request_id": "req_abc123def456",
+    "model": "llama-3.3-70b-versatile",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, world!"
+      }
+    ],
+    "response": {
+      "id": "chat_1234567890",
+      "object": "chat.completion",
+      "created": 1677832384,
+      "model": "llama-3.3-70b-versatile",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Hello! How can I help you today?"
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 13,
+        "completion_tokens": 8,
+        "total_tokens": 21
+      }
+    },
+    "metadata": {
+      "user_id": "user_123",
+      "session_id": "session_456",
+      "custom_data": {
+        "source": "web_app",
+        "feature": "chat_assistant"
+      }
+    }
+  }
+}
+```
+
+**Fields:**
+- `request_id`: Unique identifier for the request
+- `model`: The AI model used
+- `messages`: Original messages sent in the request
+- `response`: Complete API response object
+- `metadata`: Additional context data
+
+#### `chat.request.failed`
+
+Triggered when a chat completion request fails.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567891",
+  "object": "event",
+  "type": "chat.request.failed",
+  "created": 1677832384,
+  "data": {
+    "request_id": "req_abc123def456",
+    "error": {
+      "code": "rate_limit_exceeded",
+      "message": "Rate limit exceeded. Please try again later.",
+      "type": "rate_limit_error"
+    },
+    "retry_count": 2,
+    "metadata": {
+      "user_id": "user_123",
+      "session_id": "session_456"
+    }
+  }
+}
+```
+
+**Error Codes:**
+- `rate_limit_exceeded`: API rate limit exceeded
+- `invalid_api_key`: Invalid or missing API key
+- `insufficient_permissions`: API key lacks required permissions
+- `model_not_available`: Requested model is not available
+- `context_length_exceeded`: Input exceeds model's context limit
+- `content_filter_violation`: Content violates usage policies
+- `internal_server_error`: Server-side error
+
+### Streaming Events
+
+#### `chat.stream.started`
+
+Triggered when a streaming chat request begins.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567892",
+  "object": "event",
+  "type": "chat.stream.started",
+  "created": 1677832384,
+  "data": {
+    "request_id": "req_abc123def456",
+    "model": "llama-3.3-70b-versatile",
+    "stream_id": "stream_1234567890",
+    "metadata": {
+      "user_id": "user_123",
+      "session_id": "session_456"
+    }
+  }
+}
+```
+
+#### `chat.stream.completed`
+
+Triggered when a streaming chat request completes successfully.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567893",
+  "object": "event",
+  "type": "chat.stream.completed",
+  "created": 1677832384,
+  "data": {
+    "request_id": "req_abc123def456",
+    "stream_id": "stream_1234567890",
+    "total_chunks": 15,
+    "total_tokens": 234,
+    "duration_ms": 1250,
+    "metadata": {
+      "user_id": "user_123",
+      "session_id": "session_456"
+    }
+  }
+}
+```
+
+#### `chat.stream.failed`
+
+Triggered when a streaming chat request fails.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567894",
+  "object": "event",
+  "type": "chat.stream.failed",
+  "created": 1677832384,
+  "data": {
+    "request_id": "req_abc123def456",
+    "stream_id": "stream_1234567890",
+    "error": {
+      "code": "connection_timeout",
+      "message": "Stream connection timed out",
+      "type": "streaming_error"
+    },
+    "chunks_sent": 8,
+    "metadata": {
+      "user_id": "user_123",
+      "session_id": "session_456"
+    }
+  }
+}
+```
+
+### Usage & Billing Events
+
+#### `usage.threshold.exceeded`
+
+Triggered when usage approaches or exceeds a threshold.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567895",
+  "object": "event",
+  "type": "usage.threshold.exceeded",
+  "created": 1677832384,
+  "data": {
+    "threshold": 100000,
+    "current_usage": 105000,
+    "period": "monthly",
+    "resource": "tokens",
+    "percentage": 105.0,
+    "workspace_id": "ws_1234567890",
+    "projected_usage": 120000
+  }
+}
+```
+
+**Threshold Types:**
+- `tokens`: Token usage threshold
+- `requests`: API request count threshold
+- `cost`: Monetary cost threshold
+
+#### `usage.quota.exceeded`
+
+Triggered when usage quota is exceeded.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567896",
+  "object": "event",
+  "type": "usage.quota.exceeded",
+  "created": 1677832384,
+  "data": {
+    "quota": 1000000,
+    "current_usage": 1000001,
+    "period": "monthly",
+    "resource": "tokens",
+    "workspace_id": "ws_1234567890",
+    "actions": ["disable_api", "send_notification"]
+  }
+}
+```
+
+#### `billing.invoice.created`
+
+Triggered when a new invoice is created.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567897",
+  "object": "event",
+  "type": "billing.invoice.created",
+  "created": 1677832384,
+  "data": {
+    "invoice_id": "inv_1234567890",
+    "amount": 299.99,
+    "currency": "USD",
+    "period_start": 1677832384,
+    "period_end": 1677832384,
+    "status": "open",
+    "due_date": 1677832384,
+    "line_items": [
+      {
+        "description": "API Usage - 1M tokens",
+        "amount": 199.99,
+        "quantity": 1000000,
+        "unit_price": 0.00019999
+      },
+      {
+        "description": "Streaming requests",
+        "amount": 100.00,
+        "quantity": 50000,
+        "unit_price": 0.002
+      }
+    ],
+    "tax_amount": 23.99,
+    "total_amount": 323.98
+  }
+}
+```
+
+#### `billing.payment.succeeded`
+
+Triggered when a payment is successfully processed.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567898",
+  "object": "event",
+  "type": "billing.payment.succeeded",
+  "created": 1677832384,
+  "data": {
+    "invoice_id": "inv_1234567890",
+    "payment_id": "pay_1234567890",
+    "amount": 323.98,
+    "currency": "USD",
+    "payment_method": {
+      "type": "credit_card",
+      "last4": "4242",
+      "brand": "visa"
+    },
+    "workspace_id": "ws_1234567890"
+  }
+}
+```
+
+### Security Events
+
+#### `security.api_key.compromised`
+
+Triggered when suspicious API key usage is detected.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567899",
+  "object": "event",
+  "type": "security.api_key.compromised",
+  "created": 1677832384,
+  "data": {
+    "api_key_id": "key_1234567890",
+    "api_key_preview": "spj_ai_a1b2c3d4",
+    "suspicious_activity": [
+      {
+        "timestamp": 1677832384,
+        "ip_address": "192.168.1.100",
+        "user_agent": "SuspiciousBot/1.0",
+        "location": "Unknown",
+        "request_count": 1000,
+        "time_window": 300,
+        "risk_score": 0.95
+      }
+    ],
+    "recommended_action": "rotate_api_key",
+    "automated_actions": ["disable_key", "send_alert"]
+  }
+}
+```
+
+#### `security.rate_limit.exceeded`
+
+Triggered when rate limit is consistently exceeded.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567900",
+  "object": "event",
+  "type": "security.rate_limit.exceeded",
+  "created": 1677832384,
+  "data": {
+    "api_key_id": "key_1234567890",
+    "limit_type": "requests_per_minute",
+    "limit_value": 1000,
+    "actual_usage": 1200,
+    "time_window": 60,
+    "violation_count": 5,
+    "ip_addresses": ["192.168.1.100", "192.168.1.101"],
+    "recommended_action": "increase_limit"
+  }
+}
+```
+
+### Workspace Events
+
+#### `workspace.member.added`
+
+Triggered when a new member is added to the workspace.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567901",
+  "object": "event",
+  "type": "workspace.member.added",
+  "created": 1677832384,
+  "data": {
+    "workspace_id": "ws_1234567890",
+    "member": {
+      "id": "user_1234567890",
+      "email": "newuser@example.com",
+      "name": "New User",
+      "role": "member",
+      "invited_by": "user_0987654321"
+    },
+    "invitation_id": "inv_1234567890"
+  }
+}
+```
+
+#### `workspace.settings.updated`
+
+Triggered when workspace settings are changed.
+
+**Payload Structure:**
+```json
+{
+  "id": "evt_1234567902",
+  "object": "event",
+  "type": "workspace.settings.updated",
+  "created": 1677832384,
+  "data": {
+    "workspace_id": "ws_1234567890",
+    "updated_by": "user_1234567890",
+    "changes": [
+      {
+        "field": "rate_limit",
+        "old_value": 1000,
+        "new_value": 2000
+      },
+      {
+        "field": "allowed_models",
+        "old_value": ["llama-3.3-70b-versatile"],
+        "new_value": ["llama-3.3-70b-versatile", "llama-3.3-70b-code"]
+      }
+    ]
+  }
+}
+```
+
+## Event Delivery Guarantees
+
+### Delivery Reliability
+
+- **At-Least-Once Delivery**: Events may be delivered multiple times
+- **Eventual Consistency**: Events are delivered in chronological order
+- **Retry Logic**: Failed deliveries are retried with exponential backoff
+- **Dead Letter Queue**: Undeliverable events are stored for manual processing
+
+### Delivery Timing
+
+- **Immediate**: Most events delivered within seconds
+- **Batch Processing**: Usage events may be batched and delayed by up to 5 minutes
+- **Backlog Processing**: During high load, delivery may be delayed
+
+## Event Filtering
+
+### Available Filters
+
+#### Event Type Filters
+```javascript
+// Subscribe to specific event types
+const webhookConfig = {
+  url: 'https://your-app.com/webhooks',
+  events: [
+    'chat.request.completed',
+    'chat.request.failed',
+    'usage.threshold.exceeded'
+  ]
+};
+```
+
+#### Workspace Filters
+```javascript
+// Filter events by workspace
+const webhookConfig = {
+  url: 'https://your-app.com/webhooks',
+  events: ['*'], // All events
+  filters: {
+    workspace_id: 'ws_1234567890'
+  }
+};
+```
+
+#### Custom Metadata Filters
+```javascript
+// Filter based on custom metadata
+const webhookConfig = {
+  url: 'https://your-app.com/webhooks',
+  events: ['chat.request.completed'],
+  filters: {
+    metadata: {
+      source: 'production_app',
+      environment: 'production'
+    }
+  }
+};
+```
+
+## Event Versioning
+
+### Version Headers
+
+All webhook events include version information:
+
+```json
+{
+  "id": "evt_1234567890",
+  "object": "event",
+  "type": "chat.request.completed",
+  "api_version": "2024-01-01",
+  "created": 1677832384,
+  "data": { ... }
+}
+```
+
+### Version Compatibility
+
+- **Backwards Compatible**: New fields may be added without breaking changes
+- **Version Headers**: Check `api_version` to handle different event formats
+- **Migration Guide**: Version-specific handling documented separately
+
+## Testing Webhooks
+
+### Test Event Types
+
+#### `test.webhook.ping`
+Test basic webhook connectivity.
+
+```json
+{
+  "id": "evt_test_123",
+  "object": "event",
+  "type": "test.webhook.ping",
+  "created": 1677832384,
+  "data": {
+    "message": "Webhook test successful",
+    "timestamp": 1677832384
+  }
+}
+```
+
+#### `test.chat.request.completed`
+Test chat completion webhook handling.
+
+```json
+{
+  "id": "evt_test_456",
+  "object": "event",
+  "type": "test.chat.request.completed",
+  "created": 1677832384,
+  "data": {
+    "request_id": "req_test_123",
+    "model": "llama-3.3-70b-versatile",
+    "response": {
+      "id": "chat_test_123",
+      "choices": [{
+        "message": {
+          "role": "assistant",
+          "content": "This is a test response for webhook testing."
+        }
+      }]
+    },
+    "test_mode": true
+  }
+}
+```
+
+## Error Handling
+
+### Common Error Scenarios
+
+#### Network Errors
+- **Timeout**: Webhook endpoint doesn't respond within 10 seconds
+- **Connection Failed**: Cannot establish connection to webhook URL
+- **DNS Resolution**: Cannot resolve webhook domain
+
+#### HTTP Errors
+- **4xx Errors**: Client errors (invalid URL, authentication failed)
+- **5xx Errors**: Server errors (internal server error, service unavailable)
+
+#### Payload Errors
+- **Invalid JSON**: Webhook payload is malformed
+- **Schema Validation**: Payload doesn't match expected schema
+- **Size Limits**: Payload exceeds size limits
+
+### Error Response Handling
+
+```javascript
+// Handle different error scenarios
+async function handleWebhookError(event, error) {
+  const errorType = classifyError(error);
+
+  switch (errorType) {
+    case 'timeout':
+      // Retry with longer timeout
+      await retryWithTimeout(event, 30000);
+      break;
+
+    case '4xx':
+      // Don't retry client errors
+      await logPermanentFailure(event, error);
+      break;
+
+    case '5xx':
+      // Retry server errors
+      await retryWithBackoff(event, error);
+      break;
+
+    case 'network':
+      // Retry network errors
+      await retryWithBackoff(event, error);
+      break;
+
+    default:
+      // Log unknown errors
+      await logUnknownError(event, error);
+  }
+}
+
+function classifyError(error) {
+  if (error.code === 'ECONNREFUSED') return 'network';
+  if (error.code === 'ETIMEDOUT') return 'timeout';
+  if (error.status >= 400 && error.status < 500) return '4xx';
+  if (error.status >= 500) return '5xx';
+  return 'unknown';
+}
+```
+
+## Best Practices
+
+### Event Processing
+
+1. **Idempotency**: Ensure webhook processing is idempotent using event IDs
+2. **Order Independence**: Handle events that may arrive out of order
+3. **Error Handling**: Implement comprehensive error handling and logging
+4. **Monitoring**: Monitor webhook health and delivery success rates
+
+### Security
+
+1. **Signature Verification**: Always verify webhook signatures
+2. **HTTPS Only**: Use HTTPS endpoints for all webhooks
+3. **Secret Management**: Store webhook secrets securely
+4. **Rate Limiting**: Implement rate limiting on webhook endpoints
+
+### Reliability
+
+1. **Retry Logic**: Implement proper retry mechanisms
+2. **Dead Letter Queue**: Store failed events for manual processing
+3. **Monitoring**: Set up monitoring and alerting for webhook failures
+4. **Testing**: Test webhooks thoroughly before production deployment
+
+## Rate Limits
+
+### Webhook Delivery Limits
+
+- **Per Second**: 10 webhook deliveries per second per endpoint
+- **Per Minute**: 100 webhook deliveries per minute per endpoint
+- **Per Hour**: 1,000 webhook deliveries per hour per endpoint
+- **Burst Limit**: 50 deliveries in a single burst
+
+### Exceeding Limits
+
+When webhook delivery limits are exceeded:
+
+1. **Throttling**: Additional deliveries are queued
+2. **Retry Logic**: Queued deliveries are retried after rate limit reset
+3. **Notification**: Rate limit exceeded events are sent to webhook owner
+4. **Upgrade Option**: Higher limits available for enterprise customers
+
+## Support
+
+### Getting Help
+
+If you need assistance with webhooks:
+
+1. **Documentation**: Check this reference and troubleshooting guides
+2. **Support Portal**: Submit a support ticket
+3. **Community**: Ask questions in our community forums
+4. **Status Page**: Check for any ongoing incidents
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title="Events Not Delivered">
+- Verify webhook URL is accessible
+- Check webhook is enabled in dashboard
+- Ensure endpoint returns 2xx status code
+- Review firewall and security settings
+</Accordion>
+
+<Accordion title="Invalid Signatures">
+- Verify webhook secret matches
+- Check signature verification implementation
+- Ensure consistent payload stringification
+- Compare with signature calculation examples
+</Accordion>
+
+<Accordion title="Processing Errors">
+- Check webhook endpoint error handling
+- Review application logs
+- Validate payload structure
+- Test with sample payloads
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Webhook Introduction"
+    icon="webhook"
+    href="/api-reference/webhooks/introduction"
+  >
+    Learn how to set up and configure webhooks.
+  </Card>
+  <Card
+    title="Webhook Security"
+    icon="shield-check"
+    href="/api-reference/webhooks/security"
+  >
+    Learn about webhook security best practices.
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api-reference/chat/introduction"
+  >
+    Explore the full API reference.
+  </Card>
+  <Card
+    title="Troubleshooting"
+    icon="triangle-exclamation"
+    href="/community/troubleshooting"
+  >
+    Find solutions to common webhook issues.
+  </Card>
+</CardGroup>
+
+<Note>
+This event reference provides comprehensive information about all webhook events. For the latest updates and additional event types, check our API changelog and release notes.
+</Note>

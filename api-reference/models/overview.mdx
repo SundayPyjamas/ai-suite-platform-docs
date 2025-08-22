@@ -1,0 +1,477 @@
+---
+title: "Models Overview"
+description: "Complete guide to available AI models and their capabilities in SundayPyjamas AI Suite"
+---
+
+## Overview
+
+SundayPyjamas AI Suite provides access to a variety of powerful AI models optimized for different use cases. This guide helps you choose the right model for your specific needs.
+
+## Available Models
+
+### Llama 3.3 70B Versatile
+
+**Model ID**: `llama-3.3-70b-versatile`
+
+#### Overview
+The flagship model from Meta, optimized for a wide range of natural language tasks with excellent performance across different domains.
+
+#### Key Features
+- **Context Length**: Up to 8,192 tokens
+- **Multilingual**: Supports 20+ languages including English, Spanish, French, German, Chinese, and more
+- **Code Generation**: Excellent at generating and understanding code in multiple programming languages
+- **Reasoning**: Strong mathematical and logical reasoning capabilities
+- **Creative Writing**: Capable of generating creative content, stories, and marketing copy
+
+#### Use Cases
+- General conversation and chatbots
+- Code generation and debugging
+- Content creation and writing assistance
+- Educational applications
+- Research and analysis
+- Customer support automation
+
+#### Performance Characteristics
+- **Speed**: Fast inference with low latency
+- **Accuracy**: High accuracy across diverse tasks
+- **Creativity**: Balanced creativity and coherence
+- **Context Understanding**: Excellent at maintaining context in long conversations
+
+#### Example Usage
+
+```javascript
+const response = await fetch('https://suite.sundaypyjamas.com/api/v1/chat', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    messages: [
+      { role: 'user', content: 'Explain quantum computing in simple terms.' }
+    ],
+    model: 'llama-3.3-70b-versatile',
+    temperature: 0.7,
+    max_tokens: 500
+  })
+});
+```
+
+### Specialized Models
+
+#### Code Assistant Model
+**Model ID**: `llama-3.3-70b-code`
+
+##### Overview
+A specialized variant of Llama 3.3 fine-tuned specifically for programming and software development tasks.
+
+##### Key Features
+- **Multi-language Support**: Expert in 50+ programming languages
+- **Code Completion**: Advanced code completion and suggestion capabilities
+- **Debugging**: Excellent at identifying and fixing bugs
+- **Documentation**: Can generate comprehensive code documentation
+- **Architecture**: Helps with system design and architecture decisions
+
+##### Use Cases
+- IDE integrations and code editors
+- Code review automation
+- Documentation generation
+- Pair programming assistance
+- Technical interview preparation
+
+##### Example Usage
+
+```javascript
+const response = await fetch('https://suite.sundaypyjamas.com/api/v1/chat', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    messages: [
+      { role: 'user', content: 'Write a Python function to implement binary search with proper error handling.' }
+    ],
+    model: 'llama-3.3-70b-code',
+    temperature: 0.3,
+    max_tokens: 300
+  })
+});
+```
+
+#### Creative Writing Model
+**Model ID**: `llama-3.3-70b-creative`
+
+##### Overview
+A specialized model optimized for creative writing, storytelling, and content generation with enhanced creativity parameters.
+
+##### Key Features
+- **Enhanced Creativity**: Higher creativity with better narrative flow
+- **Genre Expertise**: Specialized knowledge across different writing genres
+- **Style Adaptation**: Can adapt to different writing styles and tones
+- **Character Development**: Excellent at creating compelling characters and dialogue
+- **Plot Structure**: Strong understanding of narrative structure and pacing
+
+##### Use Cases
+- Creative writing and storytelling
+- Marketing copy and advertisements
+- Social media content creation
+- Blog post and article writing
+- Script and screenplay development
+
+##### Example Usage
+
+```javascript
+const response = await fetch('https://suite.sundaypyjamas.com/api/v1/chat', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    messages: [
+      { role: 'user', content: 'Write a compelling opening paragraph for a science fiction novel set in a future where humans have colonized Mars.' }
+    ],
+    model: 'llama-3.3-70b-creative',
+    temperature: 0.9,
+    max_tokens: 200
+  })
+});
+```
+
+## Model Selection Guide
+
+### Choosing the Right Model
+
+#### For General Purpose Applications
+- **Use**: `llama-3.3-70b-versatile`
+- **When**: You need a balance of capabilities across different tasks
+- **Examples**: Chatbots, general Q&A, content assistance
+
+#### For Code-Related Tasks
+- **Use**: `llama-3.3-70b-code`
+- **When**: Building developer tools, code generation, or technical assistance
+- **Examples**: IDE plugins, code review tools, programming education
+
+#### For Creative Content
+- **Use**: `llama-3.3-70b-creative`
+- **When**: Generating marketing copy, stories, or creative content
+- **Examples**: Content marketing, creative writing, social media
+
+### Performance Comparison
+
+| Model | Context Length | Speed | Creativity | Code Quality | Multilingual |
+|-------|----------------|-------|------------|--------------|--------------|
+| Versatile | 8,192 tokens | Fast | Medium | Good | Excellent |
+| Code | 8,192 tokens | Fast | Low | Excellent | Good |
+| Creative | 8,192 tokens | Medium | High | Good | Good |
+
+## Advanced Model Features
+
+### Model Context Management
+
+#### Context Window Optimization
+
+```javascript
+// Efficient context management
+class ContextManager {
+  constructor(maxTokens = 8000) {
+    this.maxTokens = maxTokens;
+    this.estimatedTokensPerMessage = 4; // Rough estimate
+  }
+
+  optimizeMessages(messages) {
+    let totalTokens = 0;
+    const optimized = [];
+
+    // Process messages in reverse order (most recent first)
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      const estimatedTokens = this.estimateTokens(message.content);
+
+      if (totalTokens + estimatedTokens > this.maxTokens) {
+        break;
+      }
+
+      optimized.unshift(message);
+      totalTokens += estimatedTokens;
+    }
+
+    return optimized;
+  }
+
+  estimateTokens(text) {
+    // Simple estimation: ~4 characters per token
+    return Math.ceil(text.length / 4);
+  }
+
+  summarizeOldMessages(messages, summaryLength = 500) {
+    // Create a summary of older messages to save context space
+    const oldMessages = messages.slice(0, -5); // Keep last 5 messages as-is
+    const summary = this.generateSummary(oldMessages, summaryLength);
+
+    return [
+      { role: 'system', content: `Previous conversation summary: ${summary}` },
+      ...messages.slice(-5)
+    ];
+  }
+
+  generateSummary(messages, length) {
+    // This would call the AI to generate a summary
+    // For now, return a simple concatenation
+    const content = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+    return content.length > length ? content.substring(0, length) + '...' : content;
+  }
+}
+```
+
+#### Dynamic Model Selection
+
+```javascript
+// Automatically choose the best model for the task
+class SmartModelSelector {
+  constructor() {
+    this.modelCapabilities = {
+      'llama-3.3-70b-versatile': {
+        creativity: 0.7,
+        code: 0.8,
+        reasoning: 0.9,
+        speed: 0.9
+      },
+      'llama-3.3-70b-code': {
+        creativity: 0.3,
+        code: 1.0,
+        reasoning: 0.8,
+        speed: 0.8
+      },
+      'llama-3.3-70b-creative': {
+        creativity: 1.0,
+        code: 0.6,
+        reasoning: 0.7,
+        speed: 0.7
+      }
+    };
+  }
+
+  selectModel(requirements) {
+    const scores = {};
+
+    for (const [model, capabilities] of Object.entries(this.modelCapabilities)) {
+      let score = 0;
+      let totalWeight = 0;
+
+      for (const [capability, weight] of Object.entries(requirements)) {
+        if (capabilities[capability] !== undefined) {
+          score += capabilities[capability] * weight;
+          totalWeight += weight;
+        }
+      }
+
+      scores[model] = totalWeight > 0 ? score / totalWeight : 0;
+    }
+
+    // Return the model with the highest score
+    return Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  analyzePrompt(prompt) {
+    // Analyze the prompt to determine requirements
+    const requirements = {
+      creativity: 0,
+      code: 0,
+      reasoning: 0
+    };
+
+    const lowerPrompt = prompt.toLowerCase();
+
+    // Code-related keywords
+    const codeKeywords = ['code', 'function', 'program', 'api', 'debug', 'javascript', 'python', 'java'];
+    requirements.code = codeKeywords.filter(keyword => lowerPrompt.includes(keyword)).length / codeKeywords.length;
+
+    // Creative keywords
+    const creativeKeywords = ['write', 'story', 'creative', 'imagine', 'design', 'create'];
+    requirements.creativity = creativeKeywords.filter(keyword => lowerPrompt.includes(keyword)).length / creativeKeywords.length;
+
+    // Reasoning keywords
+    const reasoningKeywords = ['explain', 'analyze', 'why', 'how', 'calculate', 'solve'];
+    requirements.reasoning = reasoningKeywords.filter(keyword => lowerPrompt.includes(keyword)).length / reasoningKeywords.length;
+
+    // Normalize requirements
+    const maxScore = Math.max(...Object.values(requirements));
+    if (maxScore > 0) {
+      Object.keys(requirements).forEach(key => {
+        requirements[key] = requirements[key] / maxScore;
+      });
+    }
+
+    return requirements;
+  }
+}
+
+// Usage example
+const selector = new SmartModelSelector();
+const prompt = "Write a Python function to calculate fibonacci numbers";
+const requirements = selector.analyzePrompt(prompt);
+const bestModel = selector.selectModel(requirements);
+
+console.log(`Best model for this task: ${bestModel}`);
+// Output: llama-3.3-70b-code
+```
+
+## Model Parameters
+
+### Core Parameters
+
+#### Temperature
+Controls randomness in the output:
+- **0.0 - 0.3**: Deterministic, factual responses
+- **0.4 - 0.7**: Balanced creativity and coherence
+- **0.8 - 1.0**: Highly creative, more varied responses
+
+#### Max Tokens
+Maximum length of the generated response:
+- **Short responses**: 100-300 tokens
+- **Medium responses**: 300-1000 tokens
+- **Long responses**: 1000-4000 tokens
+
+#### Top P (Nucleus Sampling)
+Controls diversity by limiting token selection to the top P probability mass:
+- **0.1 - 0.3**: Conservative, focused responses
+- **0.4 - 0.7**: Balanced diversity
+- **0.8 - 1.0**: Maximum diversity
+
+### Advanced Parameters
+
+#### Presence Penalty
+Encourages the model to introduce new topics:
+- **-2.0 to 2.0**: Negative values encourage repetition, positive values discourage it
+
+#### Frequency Penalty
+Reduces repetition of the same tokens:
+- **-2.0 to 2.0**: Similar to presence penalty but for individual tokens
+
+#### Logprobs
+Returns probability information for generated tokens:
+- **0-5**: Number of alternative token probabilities to return
+
+## Best Practices
+
+### Model Selection
+1. **Assess Your Use Case**: Determine the primary task type
+2. **Consider Performance Requirements**: Balance speed vs. quality
+3. **Test Multiple Models**: Compare outputs for your specific use case
+4. **Monitor Costs**: Different models may have different pricing
+
+### Parameter Tuning
+1. **Start with Defaults**: Use recommended default values
+2. **Iterate Gradually**: Make small adjustments and test
+3. **Consider Context**: Adjust parameters based on input characteristics
+4. **A/B Test**: Compare different parameter combinations
+
+### Context Management
+1. **Optimize Context Length**: Use only necessary conversation history
+2. **Implement Summarization**: Summarize long conversations to save tokens
+3. **Use System Messages**: Guide model behavior with clear instructions
+4. **Monitor Token Usage**: Track and optimize token consumption
+
+### Error Handling
+1. **Handle Rate Limits**: Implement proper retry logic
+2. **Manage Context Length**: Truncate or summarize when approaching limits
+3. **Fallback Models**: Have backup models for high-availability
+4. **Monitor Performance**: Track model performance and response quality
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title="Model Not Available">
+- Check if the model ID is correct
+- Verify your API key has access to the model
+- Check the API status page for model availability
+- Try a different model as fallback
+</Accordion>
+
+<Accordion title="Poor Response Quality">
+- Adjust temperature and other parameters
+- Try a different model better suited to your use case
+- Provide clearer, more specific prompts
+- Check if context is too long or fragmented
+</Accordion>
+
+<Accordion title="Slow Response Times">
+- Consider using a faster model variant
+- Reduce max_tokens for shorter responses
+- Implement caching for repeated requests
+- Check your network connection and latency
+</Accordion>
+
+<Accordion title="Context Length Issues">
+- Implement context summarization
+- Use shorter conversation histories
+- Split long conversations into sessions
+- Monitor token usage and implement limits
+</Accordion>
+</AccordionGroup>
+
+## Model Updates & Changelog
+
+### Latest Updates
+
+#### Version 1.2.0 (Current)
+- **Improved Performance**: 20% faster inference times
+- **Enhanced Code Generation**: Better support for modern frameworks
+- **Expanded Language Support**: Added support for additional languages
+- **Bug Fixes**: Resolved issues with context handling
+
+#### Version 1.1.0
+- **New Creative Model**: Specialized model for creative writing tasks
+- **Enhanced Context Management**: Better handling of long conversations
+- **Improved Error Handling**: More robust error recovery mechanisms
+
+#### Version 1.0.0
+- **Initial Release**: Launch of Llama 3.3 70B models
+- **Core Features**: Chat completions, streaming, multiple model variants
+
+### Upcoming Features
+- **Function Calling**: Native support for tool/function calling
+- **Custom Fine-tuning**: Ability to fine-tune models on custom datasets
+- **Advanced Reasoning**: Enhanced mathematical and logical reasoning
+- **Multimodal Support**: Integration with image and audio inputs
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Chat API Reference"
+    icon="code"
+    href="/api-reference/chat/introduction"
+  >
+    Learn about the Chat API endpoints and parameters.
+  </Card>
+  <Card
+    title="Rate Limits"
+    icon="gauge-high"
+    href="/rate-limits"
+  >
+    Understand rate limits and usage optimization.
+  </Card>
+  <Card
+    title="Optimization Guide"
+    icon="bolt"
+    href="/guides/advanced/optimization"
+  >
+    Learn how to optimize your AI applications.
+  </Card>
+  <Card
+    title="Code Examples"
+    icon="terminal"
+    href="/examples/javascript"
+  >
+    See practical examples of model usage.
+  </Card>
+</CardGroup>
+
+<Note>
+Choosing the right model is crucial for optimal performance and user experience. Consider your specific use case, performance requirements, and cost constraints when selecting a model. You can always switch models later as your needs evolve.
+</Note>

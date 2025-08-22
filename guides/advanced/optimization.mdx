@@ -1,0 +1,955 @@
+---
+title: "Performance Optimization Guide"
+description: "Optimize your SundayPyjamas AI Suite applications for maximum performance and cost efficiency"
+---
+
+## Overview
+
+This comprehensive guide covers performance optimization techniques for SundayPyjamas AI Suite applications. Learn to maximize throughput, minimize latency, and optimize costs while maintaining high reliability.
+
+## Core Optimization Principles
+
+### 1. Request Optimization
+
+#### Message Formatting
+```javascript
+// ❌ Inefficient
+const messages = [
+  { role: 'user', content: 'Hello! How are you doing today? I hope you are well. I wanted to ask you about something important...' }
+];
+
+// ✅ Optimized
+const messages = [
+  { role: 'user', content: 'Hello! How are you? I have an important question.' }
+];
+
+// Best practice: Be concise and clear
+function optimizeMessage(message) {
+  return message
+    .trim()
+    .replace(/\s+/g, ' ') // Multiple spaces to single
+    .replace(/\n+/g, '\n') // Multiple newlines to single
+    .slice(0, 4000); // Reasonable length limit
+}
+```
+
+#### Parameter Tuning
+```javascript
+// Optimal parameters for different use cases
+const optimizationPresets = {
+  creative: {
+    temperature: 0.8,
+    top_p: 0.9,
+    presence_penalty: 0.6,
+    frequency_penalty: 0.3
+  },
+  analytical: {
+    temperature: 0.3,
+    top_p: 0.7,
+    presence_penalty: 0.2,
+    frequency_penalty: 0.1
+  },
+  conversational: {
+    temperature: 0.7,
+    top_p: 0.8,
+    presence_penalty: 0.4,
+    frequency_penalty: 0.2
+  }
+};
+```
+
+### 2. Connection Management
+
+#### Connection Pooling
+```javascript
+// HTTP connection pooling for better performance
+class OptimizedHTTPClient {
+  constructor(baseURL, poolSize = 10) {
+    this.baseURL = baseURL;
+    this.poolSize = poolSize;
+    this.agent = new https.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 30000,
+      maxSockets: poolSize,
+      maxFreeSockets: poolSize,
+      timeout: 60000
+    });
+  }
+
+  async request(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+
+    const requestOptions = {
+      agent: this.agent,
+      timeout: 30000,
+      headers: {
+        'Connection': 'keep-alive',
+        'Keep-Alive': 'timeout=30',
+        ...options.headers
+      },
+      ...options
+    };
+
+    const response = await fetch(url, requestOptions);
+    return response.json();
+  }
+}
+```
+
+#### Connection Reuse
+```javascript
+// Connection reuse implementation
+class ConnectionManager {
+  constructor() {
+    this.connections = new Map();
+    this.lastUsed = new Map();
+  }
+
+  getConnection(key) {
+    if (this.connections.has(key)) {
+      this.lastUsed.set(key, Date.now());
+      return this.connections.get(key);
+    }
+    return null;
+  }
+
+  setConnection(key, connection) {
+    // Clean up old connections
+    this.cleanup();
+
+    this.connections.set(key, connection);
+    this.lastUsed.set(key, Date.now());
+  }
+
+  cleanup(maxAge = 300000) { // 5 minutes
+    const now = Date.now();
+    const toRemove = [];
+
+    for (const [key, lastUsed] of this.lastUsed) {
+      if (now - lastUsed > maxAge) {
+        toRemove.push(key);
+      }
+    }
+
+    toRemove.forEach(key => {
+      this.connections.delete(key);
+      this.lastUsed.delete(key);
+    });
+  }
+}
+```
+
+## Caching Strategies
+
+### 1. Multi-Level Caching
+
+```javascript
+// Multi-level caching implementation
+class MultiLevelCache {
+  constructor() {
+    this.memoryCache = new Map();
+    this.redisCache = redis.createClient();
+    this.diskCache = new NodeCache({ stdTTL: 3600 });
+  }
+
+  async get(key) {
+    // Try memory cache first
+    if (this.memoryCache.has(key)) {
+      return this.memoryCache.get(key);
+    }
+
+    // Try Redis cache
+    try {
+      const redisData = await this.redisCache.get(key);
+      if (redisData) {
+        this.memoryCache.set(key, redisData); // Promote to memory
+        return redisData;
+      }
+    } catch (error) {
+      console.warn('Redis cache error:', error);
+    }
+
+    // Try disk cache
+    const diskData = this.diskCache.get(key);
+    if (diskData) {
+      this.memoryCache.set(key, diskData); // Promote to memory
+      return diskData;
+    }
+
+    return null;
+  }
+
+  async set(key, value, ttl = 3600) {
+    // Set in all cache levels
+    this.memoryCache.set(key, value);
+
+    try {
+      await this.redisCache.setex(key, ttl, JSON.stringify(value));
+    } catch (error) {
+      console.warn('Redis cache error:', error);
+    }
+
+    this.diskCache.set(key, value, ttl);
+  }
+
+  generateCacheKey(messages, options = {}) {
+    const hash = crypto.createHash('sha256');
+    hash.update(JSON.stringify({ messages, options }));
+    return `ai_cache:${hash.digest('hex')}`;
+  }
+}
+```
+
+### 2. Semantic Caching
+
+```javascript
+// Cache based on semantic similarity
+class SemanticCache {
+  constructor(cache, similarityThreshold = 0.85) {
+    this.cache = cache;
+    this.similarityThreshold = similarityThreshold;
+    this.embeddings = new Map();
+  }
+
+  async get(messages) {
+    const embedding = await this.getEmbedding(messages);
+    const cacheKey = this.findSimilarCache(embedding);
+
+    if (cacheKey) {
+      return await this.cache.get(cacheKey);
+    }
+
+    return null;
+  }
+
+  async set(messages, response) {
+    const embedding = await this.getEmbedding(messages);
+    const cacheKey = `semantic_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    this.embeddings.set(cacheKey, embedding);
+    await this.cache.set(cacheKey, response);
+  }
+
+  async getEmbedding(messages) {
+    // Use embedding API to get semantic representation
+    const response = await fetch('/api/embeddings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: messages.map(m => m.content).join(' ') })
+    });
+
+    return response.json();
+  }
+
+  findSimilarCache(targetEmbedding) {
+    let bestMatch = null;
+    let bestSimilarity = 0;
+
+    for (const [cacheKey, embedding] of this.embeddings) {
+      const similarity = this.cosineSimilarity(targetEmbedding, embedding);
+
+      if (similarity > bestSimilarity && similarity >= this.similarityThreshold) {
+        bestSimilarity = similarity;
+        bestMatch = cacheKey;
+      }
+    }
+
+    return bestMatch;
+  }
+
+  cosineSimilarity(a, b) {
+    const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+    const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+    const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+
+    return dotProduct / (magnitudeA * magnitudeB);
+  }
+}
+```
+
+### 3. Cache Invalidation Strategies
+
+```javascript
+// Smart cache invalidation
+class SmartCacheInvalidator {
+  constructor(cache) {
+    this.cache = cache;
+    this.dependencies = new Map();
+  }
+
+  async setWithDependencies(key, value, dependencies = []) {
+    await this.cache.set(key, value);
+
+    // Track dependencies
+    for (const dependency of dependencies) {
+      if (!this.dependencies.has(dependency)) {
+        this.dependencies.set(dependency, new Set());
+      }
+      this.dependencies.get(dependency).add(key);
+    }
+  }
+
+  async invalidateDependency(dependency) {
+    const dependentKeys = this.dependencies.get(dependency);
+
+    if (dependentKeys) {
+      const invalidationPromises = Array.from(dependentKeys).map(key =>
+        this.cache.delete(key)
+      );
+
+      await Promise.all(invalidationPromises);
+
+      // Remove dependency tracking
+      this.dependencies.delete(dependency);
+    }
+  }
+
+  async invalidatePattern(pattern) {
+    // Invalidate keys matching a pattern
+    const keys = await this.getKeysMatchingPattern(pattern);
+    const invalidationPromises = keys.map(key => this.cache.delete(key));
+
+    await Promise.all(invalidationPromises);
+  }
+
+  async getKeysMatchingPattern(pattern) {
+    // Implementation depends on cache backend
+    // For Redis, use SCAN command
+    // For in-memory, filter keys
+    return [];
+  }
+}
+```
+
+## Performance Monitoring
+
+### 1. Request Metrics Collection
+
+```javascript
+// Comprehensive metrics collection
+class PerformanceMonitor {
+  constructor() {
+    this.metrics = {
+      requestCount: 0,
+      totalLatency: 0,
+      errorCount: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      tokenUsage: 0
+    };
+    this.responseTimes = [];
+    this.errorTypes = new Map();
+  }
+
+  recordRequest(latency, success, tokens = 0, cached = false) {
+    this.metrics.requestCount++;
+    this.metrics.totalLatency += latency;
+    this.metrics.tokenUsage += tokens;
+
+    if (cached) {
+      this.metrics.cacheHits++;
+    } else {
+      this.metrics.cacheMisses++;
+    }
+
+    if (!success) {
+      this.metrics.errorCount++;
+    }
+
+    // Keep last 1000 response times for percentile calculations
+    this.responseTimes.push(latency);
+    if (this.responseTimes.length > 1000) {
+      this.responseTimes.shift();
+    }
+  }
+
+  recordError(type, message) {
+    const count = this.errorTypes.get(type) || 0;
+    this.errorTypes.set(type, count + 1);
+  }
+
+  getStats() {
+    const avgLatency = this.metrics.totalLatency / this.metrics.requestCount;
+    const errorRate = this.metrics.errorCount / this.metrics.requestCount;
+    const cacheHitRate = this.metrics.cacheHits / (this.metrics.cacheHits + this.metrics.cacheMisses);
+    const throughput = this.metrics.requestCount / (Date.now() / 1000); // requests per second
+
+    // Calculate percentiles
+    const sortedTimes = [...this.responseTimes].sort((a, b) => a - b);
+    const p50 = sortedTimes[Math.floor(sortedTimes.length * 0.5)];
+    const p95 = sortedTimes[Math.floor(sortedTimes.length * 0.95)];
+    const p99 = sortedTimes[Math.floor(sortedTimes.length * 0.99)];
+
+    return {
+      requestCount: this.metrics.requestCount,
+      averageLatency: Math.round(avgLatency * 100) / 100,
+      errorRate: Math.round(errorRate * 10000) / 100,
+      cacheHitRate: Math.round(cacheHitRate * 10000) / 100,
+      throughput: Math.round(throughput * 100) / 100,
+      percentiles: {
+        p50: Math.round(p50 * 100) / 100,
+        p95: Math.round(p95 * 100) / 100,
+        p99: Math.round(p99 * 100) / 100
+      },
+      tokenUsage: this.metrics.tokenUsage,
+      topErrors: Array.from(this.errorTypes.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+    };
+  }
+
+  reset() {
+    Object.keys(this.metrics).forEach(key => {
+      this.metrics[key] = 0;
+    });
+    this.responseTimes = [];
+    this.errorTypes.clear();
+  }
+}
+```
+
+### 2. Real-time Performance Dashboard
+
+```jsx
+// React component for performance monitoring
+import { useEffect, useState } from 'react';
+
+export default function PerformanceDashboard() {
+  const [metrics, setMetrics] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        const response = await fetch('/api/metrics');
+        const data = await response.json();
+        setMetrics(data);
+      } catch (error) {
+        console.error('Failed to fetch metrics:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 5000); // Update every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  if (isLoading) {
+    return <div>Loading performance metrics...</div>;
+  }
+
+  if (!metrics) {
+    return <div>Failed to load metrics</div>;
+  }
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6">
+      <div className="bg-white rounded-lg p-4 shadow">
+        <h3 className="text-sm font-medium text-gray-500">Requests</h3>
+        <p className="text-2xl font-bold text-gray-900">
+          {metrics.requestCount.toLocaleString()}
+        </p>
+      </div>
+
+      <div className="bg-white rounded-lg p-4 shadow">
+        <h3 className="text-sm font-medium text-gray-500">Avg Latency</h3>
+        <p className="text-2xl font-bold text-gray-900">
+          {metrics.averageLatency}ms
+        </p>
+      </div>
+
+      <div className="bg-white rounded-lg p-4 shadow">
+        <h3 className="text-sm font-medium text-gray-500">Error Rate</h3>
+        <p className="text-2xl font-bold text-red-600">
+          {metrics.errorRate}%
+        </p>
+      </div>
+
+      <div className="bg-white rounded-lg p-4 shadow">
+        <h3 className="text-sm font-medium text-gray-500">Cache Hit Rate</h3>
+        <p className="text-2xl font-bold text-green-600">
+          {metrics.cacheHitRate}%
+        </p>
+      </div>
+
+      <div className="col-span-full bg-white rounded-lg p-4 shadow">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">
+          Response Time Percentiles
+        </h3>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-blue-600">
+              {metrics.percentiles.p50}ms
+            </p>
+            <p className="text-sm text-gray-500">P50</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-orange-600">
+              {metrics.percentiles.p95}ms
+            </p>
+            <p className="text-sm text-gray-500">P95</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-red-600">
+              {metrics.percentiles.p99}ms
+            </p>
+            <p className="text-sm text-gray-500">P99</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+## Load Balancing and Scaling
+
+### 1. Client-Side Load Balancing
+
+```javascript
+// Load balancing across multiple API endpoints
+class LoadBalancer {
+  constructor(endpoints = []) {
+    this.endpoints = endpoints.map(endpoint => ({
+      url: endpoint,
+      health: 100,
+      activeConnections: 0,
+      lastHealthCheck: Date.now()
+    }));
+    this.healthCheckInterval = 30000; // 30 seconds
+    this.startHealthChecks();
+  }
+
+  async getOptimalEndpoint() {
+    // Filter healthy endpoints
+    const healthyEndpoints = this.endpoints.filter(ep => ep.health > 50);
+
+    if (healthyEndpoints.length === 0) {
+      throw new Error('No healthy endpoints available');
+    }
+
+    // Sort by health score and connection count
+    const sorted = healthyEndpoints.sort((a, b) => {
+      const scoreA = a.health - a.activeConnections * 10;
+      const scoreB = b.health - b.activeConnections * 10;
+      return scoreB - scoreA;
+    });
+
+    return sorted[0];
+  }
+
+  async makeRequest(path, options = {}) {
+    const endpoint = await this.getOptimalEndpoint();
+    endpoint.activeConnections++;
+
+    try {
+      const url = `${endpoint.url}${path}`;
+      const response = await fetch(url, options);
+      const data = await response.json();
+
+      // Update health based on response
+      if (response.ok) {
+        endpoint.health = Math.min(100, endpoint.health + 5);
+      } else {
+        endpoint.health = Math.max(0, endpoint.health - 10);
+      }
+
+      return data;
+    } finally {
+      endpoint.activeConnections = Math.max(0, endpoint.activeConnections - 1);
+    }
+  }
+
+  startHealthChecks() {
+    setInterval(async () => {
+      for (const endpoint of this.endpoints) {
+        try {
+          const response = await fetch(`${endpoint.url}/health`, {
+            timeout: 5000
+          });
+
+          if (response.ok) {
+            endpoint.health = Math.min(100, endpoint.health + 10);
+          } else {
+            endpoint.health = Math.max(0, endpoint.health - 20);
+          }
+        } catch (error) {
+          endpoint.health = Math.max(0, endpoint.health - 20);
+        }
+
+        endpoint.lastHealthCheck = Date.now();
+      }
+    }, this.healthCheckInterval);
+  }
+}
+```
+
+### 2. Adaptive Request Routing
+
+```javascript
+// Adaptive routing based on request characteristics
+class AdaptiveRouter {
+  constructor(routes = []) {
+    this.routes = routes.map(route => ({
+      ...route,
+      performance: 100,
+      requestCount: 0
+    }));
+    this.performanceWindow = [];
+  }
+
+  async routeRequest(request) {
+    const bestRoute = await this.selectOptimalRoute(request);
+    const startTime = Date.now();
+
+    try {
+      const response = await this.executeRequest(bestRoute, request);
+      const latency = Date.now() - startTime;
+
+      this.updateRoutePerformance(bestRoute, latency, true);
+      return response;
+    } catch (error) {
+      const latency = Date.now() - startTime;
+      this.updateRoutePerformance(bestRoute, latency, false);
+      throw error;
+    }
+  }
+
+  async selectOptimalRoute(request) {
+    const scoredRoutes = await Promise.all(
+      this.routes.map(async route => ({
+        route,
+        score: await this.calculateRouteScore(route, request)
+      }))
+    );
+
+    return scoredRoutes.sort((a, b) => b.score - a.score)[0].route;
+  }
+
+  async calculateRouteScore(route, request) {
+    let score = route.performance;
+
+    // Route-specific scoring
+    if (route.specialization) {
+      score += this.calculateSpecializationScore(route, request);
+    }
+
+    // Geographic scoring
+    if (route.region) {
+      score += this.calculateGeographicScore(route, request);
+    }
+
+    // Load balancing
+    score -= route.requestCount * 5;
+
+    return Math.max(0, score);
+  }
+
+  calculateSpecializationScore(route, request) {
+    const content = JSON.stringify(request).toLowerCase();
+    let score = 0;
+
+    switch (route.specialization) {
+      case 'creative':
+        if (content.includes('write') || content.includes('create')) score += 20;
+        break;
+      case 'analytical':
+        if (content.includes('analyze') || content.includes('calculate')) score += 20;
+        break;
+      case 'conversational':
+        if (content.includes('chat') || content.includes('talk')) score += 20;
+        break;
+    }
+
+    return score;
+  }
+
+  updateRoutePerformance(route, latency, success) {
+    route.requestCount++;
+
+    // Update performance score
+    const targetLatency = route.targetLatency || 1000;
+    const latencyScore = Math.max(0, 100 - (latency / targetLatency) * 100);
+
+    if (success) {
+      route.performance = Math.min(100, route.performance + (latencyScore - route.performance) * 0.1);
+    } else {
+      route.performance = Math.max(0, route.performance - 10);
+    }
+
+    // Reset request count periodically
+    if (route.requestCount > 1000) {
+      route.requestCount = Math.floor(route.requestCount * 0.1);
+    }
+  }
+}
+```
+
+## Cost Optimization
+
+### 1. Token Usage Optimization
+
+```javascript
+// Optimize token usage across requests
+class TokenOptimizer {
+  constructor() {
+    this.usageHistory = [];
+    this.optimizationRules = new Map();
+  }
+
+  optimizeRequest(messages, options = {}) {
+    const optimized = {
+      messages: this.optimizeMessages(messages),
+      options: this.optimizeOptions(options, messages)
+    };
+
+    return optimized;
+  }
+
+  optimizeMessages(messages) {
+    return messages.map(message => ({
+      ...message,
+      content: this.compressContent(message.content)
+    }));
+  }
+
+  compressContent(content) {
+    return content
+      .trim()
+      // Remove excessive whitespace
+      .replace(/\s+/g, ' ')
+      .replace(/\n\s*\n/g, '\n')
+      // Remove redundant phrases
+      .replace(/\b(please|kindly|could you|would you mind)\b/gi, '')
+      .trim();
+  }
+
+  optimizeOptions(options, messages) {
+    const content = messages.map(m => m.content).join(' ');
+    const contentLength = content.length;
+
+    // Adjust parameters based on content characteristics
+    const optimized = { ...options };
+
+    if (contentLength < 100) {
+      // Short content - lower temperature for consistency
+      optimized.temperature = Math.min(options.temperature || 0.7, 0.5);
+    } else if (contentLength > 1000) {
+      // Long content - higher temperature for creativity
+      optimized.temperature = Math.max(options.temperature || 0.7, 0.8);
+    }
+
+    // Adjust max_tokens based on input length
+    if (!optimized.max_tokens) {
+      optimized.max_tokens = Math.min(Math.max(contentLength * 2, 100), 2000);
+    }
+
+    return optimized;
+  }
+
+  trackUsage(usage) {
+    this.usageHistory.push({
+      ...usage,
+      timestamp: Date.now()
+    });
+
+    // Keep last 1000 entries
+    if (this.usageHistory.length > 1000) {
+      this.usageHistory.shift();
+    }
+  }
+
+  getUsageStats() {
+    if (this.usageHistory.length === 0) return null;
+
+    const totalTokens = this.usageHistory.reduce((sum, usage) =>
+      sum + (usage.total_tokens || 0), 0
+    );
+
+    const avgTokensPerRequest = totalTokens / this.usageHistory.length;
+
+    return {
+      totalRequests: this.usageHistory.length,
+      totalTokens,
+      avgTokensPerRequest: Math.round(avgTokensPerRequest),
+      costEstimate: this.calculateCost(totalTokens)
+    };
+  }
+
+  calculateCost(tokenCount) {
+    // Example pricing (adjust based on actual costs)
+    const inputCost = 0.0015; // $0.0015 per 1K input tokens
+    const outputCost = 0.002; // $0.002 per 1K output tokens
+
+    // Estimate 70% input, 30% output
+    const estimatedInputTokens = tokenCount * 0.7;
+    const estimatedOutputTokens = tokenCount * 0.3;
+
+    const cost = (estimatedInputTokens / 1000 * inputCost) +
+                 (estimatedOutputTokens / 1000 * outputCost);
+
+    return Math.round(cost * 10000) / 10000;
+  }
+}
+```
+
+### 2. Intelligent Caching Strategy
+
+```javascript
+// Cost-aware caching
+class CostAwareCache {
+  constructor(cache, costThreshold = 0.01) {
+    this.cache = cache;
+    this.costThreshold = costThreshold;
+    this.requestCosts = new Map();
+  }
+
+  async getOrCompute(key, computeFn, estimatedCost = 0) {
+    // Check if we should use cache based on cost
+    if (estimatedCost > this.costThreshold) {
+      const cached = await this.cache.get(key);
+      if (cached) {
+        this.requestCosts.set(key, -estimatedCost); // Negative cost for cache hits
+        return cached;
+      }
+    }
+
+    // Compute the result
+    const result = await computeFn();
+
+    // Cache if cost justifies it
+    if (estimatedCost > this.costThreshold) {
+      await this.cache.set(key, result);
+    }
+
+    this.requestCosts.set(key, estimatedCost);
+    return result;
+  }
+
+  getCostSavings() {
+    let totalCost = 0;
+    let cacheSavings = 0;
+
+    for (const cost of this.requestCosts.values()) {
+      totalCost += Math.abs(cost);
+      if (cost < 0) {
+        cacheSavings += Math.abs(cost);
+      }
+    }
+
+    return {
+      totalCost: Math.round(totalCost * 10000) / 10000,
+      cacheSavings: Math.round(cacheSavings * 10000) / 10000,
+      savingsPercentage: totalCost > 0 ? Math.round((cacheSavings / totalCost) * 100) : 0
+    };
+  }
+}
+```
+
+## Best Practices
+
+### Performance
+- **Monitor Everything**: Track latency, throughput, error rates
+- **Use Appropriate Timeouts**: Set realistic timeouts for different operations
+- **Implement Circuit Breakers**: Prevent cascade failures
+- **Optimize Database Queries**: Use indexes and efficient queries
+- **Use Connection Pooling**: Reuse connections for better performance
+
+### Cost Optimization
+- **Cache Aggressively**: Cache responses when possible
+- **Batch Requests**: Combine multiple requests when appropriate
+- **Optimize Prompts**: Be concise and clear in your requests
+- **Monitor Usage**: Track token usage and costs
+- **Use Appropriate Models**: Choose the right model for your use case
+
+### Reliability
+- **Implement Retry Logic**: Use exponential backoff for failed requests
+- **Handle Rate Limits**: Implement proper rate limit handling
+- **Use Circuit Breakers**: Prevent system overload
+- **Monitor Health**: Set up comprehensive monitoring
+- **Plan for Failures**: Have fallback mechanisms in place
+
+### Scalability
+- **Design for Horizontal Scaling**: Add more instances as needed
+- **Use Load Balancing**: Distribute load across multiple servers
+- **Implement Auto-scaling**: Scale based on demand
+- **Optimize Resource Usage**: Use appropriate instance sizes
+- **Cache at Multiple Levels**: Use CDN, edge caching, and in-memory caching
+
+## Troubleshooting
+
+### Common Performance Issues
+
+<AccordionGroup>
+<Accordion title="High Latency">
+- Check network connectivity and DNS resolution
+- Monitor API response times
+- Optimize database queries
+- Implement proper caching
+- Use CDN for static assets
+</Accordion>
+
+<Accordion title="High Error Rates">
+- Implement proper error handling
+- Add retry logic with exponential backoff
+- Monitor for API rate limits
+- Check for resource exhaustion
+- Review error logs and patterns
+</Accordion>
+
+<Accordion title="Memory Leaks">
+- Monitor memory usage
+- Implement proper garbage collection
+- Check for circular references
+- Use streaming for large responses
+- Profile memory usage regularly
+</Accordion>
+
+<Accordion title="Cache Invalidation Issues">
+- Implement proper cache invalidation strategies
+- Use appropriate cache TTL values
+- Monitor cache hit rates
+- Handle cache stampedes
+- Implement cache warming
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Batch Processing"
+    icon="list"
+    href="/guides/advanced/batch-processing"
+  >
+    Learn advanced batch processing techniques.
+  </Card>
+  <Card
+    title="Monitoring & Observability"
+    icon="chart-line"
+    href="/platform/monitoring/datadog"
+  >
+    Set up comprehensive monitoring and alerting.
+  </Card>
+  <Card
+    title="Rate Limits"
+    icon="gauge-high"
+    href="/rate-limits"
+  >
+    Understand and optimize for rate limits.
+  </Card>
+  <Card
+    title="Security Best Practices"
+    icon="shield-check"
+    href="/platform/security/authentication"
+  >
+    Implement security best practices.
+  </Card>
+</CardGroup>
+
+<Note>
+Performance optimization is an ongoing process that requires continuous monitoring and adjustment. Focus on the metrics that matter most to your users and business objectives, and iterate based on real-world usage patterns.
+</Note>

@@ -1,0 +1,597 @@
+---
+title: "Build a Chat Application"
+description: "Complete tutorial: Build a modern chat interface with streaming responses using SundayPyjamas AI Suite"
+---
+
+## Overview
+
+In this tutorial, you'll build a complete chat application with streaming responses, message history, and a modern user interface. This project demonstrates real-world patterns for integrating the SundayPyjamas AI Suite API.
+
+## What You'll Build
+
+- **Modern Chat Interface**: Clean, responsive UI with real-time messaging
+- **Streaming Responses**: Real-time text streaming from the AI
+- **Message History**: Persistent conversation history
+- **Error Handling**: Robust error handling and user feedback
+- **Loading States**: Smooth loading indicators and UX
+- **Responsive Design**: Works on desktop and mobile devices
+
+## Prerequisites
+
+- Node.js 18+ installed
+- Basic JavaScript/React knowledge
+- SundayPyjamas AI Suite account and API key
+- npm or yarn package manager
+
+## Project Setup
+
+### 1. Create New Project
+
+```bash
+npx create-next-app@latest ai-chat-app
+cd ai-chat-app
+```
+
+### 2. Install Dependencies
+
+```bash
+npm install lucide-react clsx tailwind-merge
+```
+
+### 3. Environment Setup
+
+Create a `.env.local` file:
+
+```env
+NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY=spj_ai_your_api_key_here
+```
+
+### 4. Project Structure
+
+```
+ai-chat-app/
+├── app/
+│   ├── components/
+│   │   ├── ChatInterface.jsx
+│   │   ├── Message.jsx
+│   │   ├── MessageInput.jsx
+│   │   └── StreamingText.jsx
+│   ├── lib/
+│   │   └── api.js
+│   ├── page.js
+│   └── layout.js
+└── package.json
+```
+
+## Building the Components
+
+### 1. API Service Layer
+
+Create `app/lib/api.js`:
+
+```javascript
+class SundayPyjamasAPI {
+  constructor(apiKey) {
+    this.apiKey = apiKey;
+    this.baseURL = 'https://suite.sundaypyjamas.com/api/v1';
+  }
+
+  async *chatWithStreaming(messages) {
+    const response = await fetch(`${this.baseURL}/chat`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages,
+        stream: true,
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') return;
+
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices[0]?.delta?.content;
+            if (content) {
+              yield content;
+            }
+          } catch (e) {
+            // Skip invalid JSON
+          }
+        }
+      }
+    }
+  }
+
+  async chat(messages) {
+    const response = await fetch(`${this.baseURL}/chat`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages,
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+}
+
+// Export singleton instance
+export const api = new SundayPyjamasAPI(process.env.NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY);
+```
+
+### 2. Streaming Text Component
+
+Create `app/components/StreamingText.jsx`:
+
+```jsx
+'use client';
+
+import { useEffect, useState } from 'react';
+
+export default function StreamingText({ text, onComplete }) {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    if (!text) return;
+
+    let currentIndex = 0;
+    const interval = setInterval(() => {
+      if (currentIndex < text.length) {
+        setDisplayedText(text.slice(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        clearInterval(interval);
+        setIsComplete(true);
+        onComplete?.();
+      }
+    }, 30); // Adjust speed as needed
+
+    return () => clearInterval(interval);
+  }, [text, onComplete]);
+
+  return (
+    <span className="text-gray-800">
+      {displayedText}
+      {!isComplete && (
+        <span className="animate-pulse text-gray-400">|</span>
+      )}
+    </span>
+  );
+}
+```
+
+### 3. Message Component
+
+Create `app/components/Message.jsx`:
+
+```jsx
+'use client';
+
+import { User, Bot } from 'lucide-react';
+import StreamingText from './StreamingText';
+
+export default function Message({ message, isStreaming = false }) {
+  const isUser = message.role === 'user';
+
+  return (
+    <div className={`flex gap-4 p-4 ${isUser ? 'bg-blue-50' : 'bg-gray-50'}`}>
+      <div className="flex-shrink-0">
+        {isUser ? (
+          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+            <User className="w-4 h-4 text-white" />
+          </div>
+        ) : (
+          <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+            <Bot className="w-4 h-4 text-white" />
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1">
+        <div className="font-semibold text-sm text-gray-600 mb-1">
+          {isUser ? 'You' : 'AI Assistant'}
+        </div>
+        <div className="text-gray-800">
+          {isStreaming ? (
+            <StreamingText
+              text={message.content}
+              onComplete={() => console.log('Streaming complete')}
+            />
+          ) : (
+            message.content
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+### 4. Message Input Component
+
+Create `app/components/MessageInput.jsx`:
+
+```jsx
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { Send } from 'lucide-react';
+
+export default function MessageInput({ onSendMessage, disabled = false }) {
+  const [message, setMessage] = useState('');
+  const textareaRef = useRef(null);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (message.trim() && !disabled) {
+      onSendMessage(message.trim());
+      setMessage('');
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  }, [message]);
+
+  return (
+    <form onSubmit={handleSubmit} className="p-4 border-t bg-white">
+      <div className="flex gap-2">
+        <textarea
+          ref={textareaRef}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type your message..."
+          disabled={disabled}
+          className="flex-1 resize-none border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          rows={1}
+        />
+        <button
+          type="submit"
+          disabled={disabled || !message.trim()}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <Send className="w-4 h-4" />
+        </button>
+      </div>
+    </form>
+  );
+}
+```
+
+### 5. Main Chat Interface
+
+Create `app/components/ChatInterface.jsx`:
+
+```jsx
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import Message from './Message';
+import MessageInput from './MessageInput';
+import { api } from '../lib/api';
+
+export default function ChatInterface() {
+  const [messages, setMessages] = useState([
+    {
+      role: 'assistant',
+      content: 'Hello! I\'m your AI assistant powered by SundayPyjamas AI Suite. How can I help you today?'
+    }
+  ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSendMessage = async (content) => {
+    const userMessage = { role: 'user', content };
+    const newMessages = [...messages, userMessage];
+
+    setMessages(newMessages);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // For streaming, we'll add an empty assistant message first
+      const assistantMessage = { role: 'assistant', content: '' };
+      setMessages([...newMessages, assistantMessage]);
+
+      let accumulatedContent = '';
+
+      // Use streaming API
+      for await (const chunk of api.chatWithStreaming(newMessages)) {
+        accumulatedContent += chunk;
+        setMessages([...newMessages, { role: 'assistant', content: accumulatedContent }]);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      setError('Failed to get response. Please try again.');
+      // Remove the empty assistant message on error
+      setMessages(newMessages);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b p-4">
+        <h1 className="text-xl font-semibold text-gray-800">
+          AI Chat Assistant
+        </h1>
+        <p className="text-sm text-gray-600">
+          Powered by SundayPyjamas AI Suite
+        </p>
+      </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 m-4">
+          <div className="flex">
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-400 hover:text-red-600"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto">
+        {messages.map((message, index) => (
+          <Message
+            key={index}
+            message={message}
+            isStreaming={isLoading && index === messages.length - 1 && message.role === 'assistant'}
+          />
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <MessageInput
+        onSendMessage={handleSendMessage}
+        disabled={isLoading}
+      />
+    </div>
+  );
+}
+```
+
+### 6. Main Page
+
+Update `app/page.js`:
+
+```jsx
+import ChatInterface from './components/ChatInterface';
+
+export default function Home() {
+  return <ChatInterface />;
+}
+```
+
+## Running the Application
+
+### Start Development Server
+
+```bash
+npm run dev
+```
+
+### Test the Chat Interface
+
+1. Open your browser to `http://localhost:3000`
+2. Try sending a message like "Hello!" or "Tell me a joke"
+3. Watch the streaming response appear in real-time
+4. Test error handling by temporarily removing your API key
+
+## Advanced Features
+
+### Adding Message Persistence
+
+Create a simple local storage hook:
+
+```javascript
+// app/hooks/useLocalStorage.js
+import { useState, useEffect } from 'react';
+
+export function useLocalStorage(key, initialValue) {
+  const [storedValue, setStoredValue] = useState(() => {
+    if (typeof window === 'undefined') return initialValue;
+
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(`Error reading localStorage key "${key}":`, error);
+      return initialValue;
+    }
+  });
+
+  const setValue = (value) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+      }
+    } catch (error) {
+      console.error(`Error setting localStorage key "${key}":`, error);
+    }
+  };
+
+  return [storedValue, setValue];
+}
+```
+
+Update the ChatInterface to use persistence:
+
+```jsx
+// In ChatInterface.jsx
+import { useLocalStorage } from '../hooks/useLocalStorage';
+
+export default function ChatInterface() {
+  const [messages, setMessages] = useLocalStorage('chat-messages', [
+    {
+      role: 'assistant',
+      content: 'Hello! I\'m your AI assistant powered by SundayPyjamas AI Suite. How can I help you today?'
+    }
+  ]);
+  // ... rest of component
+}
+```
+
+### Adding Typing Indicators
+
+```jsx
+// In ChatInterface.jsx, add loading state
+{messages.length === 0 && (
+  <div className="flex gap-4 p-4">
+    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+      <Bot className="w-4 h-4 text-white" />
+    </div>
+    <div className="flex-1">
+      <div className="text-sm text-gray-600 mb-1">AI Assistant</div>
+      <div className="flex gap-1">
+        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+      </div>
+    </div>
+  </div>
+)}
+```
+
+## Deployment
+
+### Deploy to Vercel
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Add environment variables in Vercel dashboard
+4. Deploy!
+
+### Environment Variables for Production
+
+Make sure to set your API key in your deployment platform:
+- Vercel: Add `NEXT_PUBLIC_SUNDAYPYJAMAS_API_KEY` to environment variables
+- Netlify: Add to build environment variables
+- Other platforms: Follow their documentation
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+<Accordion title="API Key Not Working">
+- Verify your API key is correct and active
+- Check that it's in the right environment variable
+- Ensure the key has proper permissions
+</Accordion>
+
+<Accordion title="Streaming Not Working">
+- Check browser console for errors
+- Verify your API key has streaming permissions
+- Test with a simple non-streaming request first
+</Accordion>
+
+<Accordion title="Styling Issues">
+- Ensure Tailwind CSS is properly configured
+- Check that all components are imported correctly
+- Verify CSS classes are being applied
+</Accordion>
+
+<Accordion title="Performance Issues">
+- Consider implementing message pagination for long conversations
+- Add rate limiting for rapid successive requests
+- Optimize component re-renders with React.memo
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Content Generator Tutorial"
+    icon="pen-nib"
+    href="/guides/tutorials/content-generator"
+  >
+    Build a content generation tool with multiple output formats.
+  </Card>
+  <Card
+    title="Advanced Streaming"
+    icon="bolt"
+    href="/guides/advanced/streaming-patterns"
+  >
+    Learn advanced streaming patterns and optimizations.
+  </Card>
+  <Card
+    title="Error Handling Guide"
+    icon="triangle-exclamation"
+    href="/errors"
+  >
+    Implement comprehensive error handling strategies.
+  </Card>
+  <Card
+    title="Rate Limits"
+    icon="gauge-high"
+    href="/rate-limits"
+  >
+    Understand and optimize for rate limits.
+  </Card>
+</CardGroup>
+
+<Note>
+You've successfully built a complete chat application with streaming responses! This foundation can be extended with features like file uploads, conversation management, user authentication, and more.
+</Note>
