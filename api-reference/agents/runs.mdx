@@ -1,0 +1,121 @@
+﻿---
+title: "Runs"
+description: "Submit autonomous tasks to an agent and track their progress"
+---
+
+<Info>
+Runs require `capabilities.deliverables.enabled: true` in the agent's [config](/api-reference/agents/agents#agent-config-reference). Autonomous mode only — for turn-based chat, use [Messaging](/api-reference/agents/messaging) instead.
+</Info>
+
+## List Runs
+
+```http
+GET /api/v1/managed-agents/agents/&#123;agentId&#125;/runs
+```
+
+<ParamField query="limit" type="number" default="25">
+Number of runs to return (1–100).
+</ParamField>
+
+<ResponseField name="runs" type="Run[]">
+  <Expandable title="Run object">
+    <ResponseField name="id" type="string" />
+    <ResponseField name="status" type="string">`pending` · `running` · `completed` · `failed`</ResponseField>
+    <ResponseField name="task" type="string">The task description submitted for this run</ResponseField>
+    <ResponseField name="session_id" type="string" />
+    <ResponseField name="created_at" type="string" />
+    <ResponseField name="started_at" type="string | null" />
+    <ResponseField name="completed_at" type="string | null" />
+  </Expandable>
+</ResponseField>
+
+---
+
+## Create Run
+
+```http
+POST /api/v1/managed-agents/agents/&#123;agentId&#125;/runs
+```
+
+<ParamField body="task" type="string" required>
+The task you want the agent to complete, in natural language.
+</ParamField>
+
+<ParamField body="sessionId" type="string">
+Run inside an existing session. If omitted, a new session is created.
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  <Expandable title="metadata">
+    <ParamField body="source" type="string">
+    Originating integration platform. **Do not** set this for known integrations (e.g. `slack`, `pumble`) — those must trigger runs via their platform webhook, not this endpoint directly.
+    </ParamField>
+    <ParamField body="containerId" type="string">Thread/channel container ID</ParamField>
+    <ParamField body="threadId" type="string" />
+    <ParamField body="externalWorkspaceId" type="string" />
+    <ParamField body="messageId" type="string">Idempotency/dedup key</ParamField>
+  </Expandable>
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/managed-agents/agents/3fae1c2e-.../runs \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{ "task": "Summarize the attached Q2 sales report and list top 3 risks." }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201 Created
+{
+  "runId": "run_8a21...",
+  "sessionId": "sess_44bc...",
+  "created_at": "2026-07-08T10:05:00Z"
+}
+```
+</ResponseExample>
+
+<Warning>
+Returns `400` with `"Deliverables are disabled for this agent"` if the agent's config doesn't enable deliverables. Returns `400` with `"Integration mentions must use the platform webhook"` if `metadata.source` is a recognized integration.
+</Warning>
+
+---
+
+## Get Run
+
+```http
+GET /api/v1/managed-agents/agents/&#123;agentId&#125;/runs/&#123;runId&#125;
+```
+
+<ResponseField name="run" type="object">Run object — see [List Runs](#list-runs)</ResponseField>
+<ResponseField name="events" type="object[]">
+  <Expandable title="event">
+    <ResponseField name="id" type="string" />
+    <ResponseField name="event_type" type="string" />
+    <ResponseField name="payload" type="object" />
+    <ResponseField name="created_at" type="string" />
+  </Expandable>
+</ResponseField>
+<ResponseField name="artifacts" type="object[]">
+  <Expandable title="artifact">
+    <ResponseField name="id" type="string" />
+    <ResponseField name="filename" type="string" />
+    <ResponseField name="mime_type" type="string" />
+    <ResponseField name="size_bytes" type="number" />
+    <ResponseField name="created_at" type="string" />
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://suite.sundaypyjamas.com/api/v1/managed-agents/agents/3fae1c2e-.../runs/run_8a21... \
+  -H "Authorization: Bearer spj_ai_your_api_key_here"
+```
+</RequestExample>
+
+## Polling vs. Streaming
+
+<Tip>
+For long-running tasks, poll `GET .../runs/{runId}` every few seconds until `status` is `completed` or `failed`, then read `artifacts`. To cancel a run in progress, see [Cancel Run](/api-reference/agents/messaging#cancel-run).
+</Tip>

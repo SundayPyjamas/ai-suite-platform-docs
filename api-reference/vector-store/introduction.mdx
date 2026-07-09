@@ -1,0 +1,47 @@
+---
+title: "Vector Store API"
+description: "Per-app vector collections for similarity search and custom retrieval pipelines"
+---
+
+## Overview
+
+Each app can have one or more named **vector stores** — collections of embeddings you manage directly, useful when you want full control over chunking and retrieval instead of using the higher-level [RAG API](/api-reference/rag/introduction).
+
+<Steps>
+  <Step title="Create an index">
+    [`POST .../create-index`](/api-reference/vector-store/indexes#create-index) with your embedding dimension and distance metric.
+  </Step>
+  <Step title="Upsert vectors">
+    [`POST .../upsert`](/api-reference/vector-store/vectors#upsert-vectors) with `{ id, vector, payload }` points.
+  </Step>
+  <Step title="Query">
+    [`POST .../query`](/api-reference/vector-store/vectors#query-vectors) with a raw vector (or `query` text for Bedrock Knowledge Base–backed apps).
+  </Step>
+</Steps>
+
+## Base URL
+
+```
+https://suite.sundaypyjamas.com/api/v1/apps/{appId}/vector/{vectorName}
+```
+
+`vectorName` is a namespace you choose per app — e.g. `"docs"`, `"products"` — allowing one app to maintain multiple independent vector collections.
+
+## Authentication
+
+```http
+Authorization: Bearer spj_ai_your_api_key_here
+```
+
+Widget tokens are also accepted as a fallback for browser-embedded use cases.
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Indexes" icon="database" href="/api-reference/vector-store/indexes">
+    Create, list, inspect, and delete vector collections.
+  </Card>
+  <Card title="Vectors" icon="chart-scatter" href="/api-reference/vector-store/vectors">
+    Upsert and query vector points.
+  </Card>
+</CardGroup>

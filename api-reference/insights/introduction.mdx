@@ -1,0 +1,28 @@
+---
+title: "Insights API"
+description: "Query conversation analytics and usage across your workspace's apps"
+---
+
+## Overview
+
+The Insights API gives you read access to every conversation your workspace's apps have had — across [Apps](/api-reference/apps/introduction) and [Agents](/api-reference/agents/introduction) — along with per-conversation usage and cost.
+
+## Base URL
+
+```
+https://suite.sundaypyjamas.com/api/v1/workspaces/{workspaceId}/insights
+```
+
+## Authentication
+
+```http
+Authorization: Bearer spj_ai_your_api_key_here
+```
+
+The `workspaceId` in the path must match the workspace your API key belongs to.
+
+## Resources
+
+<Card title="Conversations" icon="comments" href="/api-reference/insights/conversations">
+  List and inspect conversations with usage summaries, messages, and cost breakdowns.
+</Card>

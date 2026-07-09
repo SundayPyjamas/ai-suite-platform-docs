@@ -1,0 +1,97 @@
+---
+title: "Import"
+description: "Bulk-import a folder, zip archive, or GitHub repository"
+---
+
+## Import Files
+
+```http
+POST /api/v1/workspaces/{workspaceId}/storage/import
+```
+
+Content type: `multipart/form-data`. Max 500 MB per file.
+
+<ParamField body="kind" type="string" default="folder">`folder` · `zip` · `files`</ParamField>
+<ParamField body="file" type="File">A single zip archive — required when `kind` is `zip`.</ParamField>
+<ParamField body="file[]" type="File[]">Multiple files (with `webkitRelativePath` for folder structure) — required when `kind` is `folder` or `files`.</ParamField>
+<ParamField body="pathPrefix" type="string">Destination path prefix, e.g. `/my-docs/`.</ParamField>
+
+<ResponseField name="imported" type="number" />
+<ResponseField name="skipped" type="number" />
+<ResponseField name="errors" type="object[]">`{ path, error }` for any files that failed to import</ResponseField>
+<ResponseField name="fileIds" type="string[]" />
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/workspaces/ws_123/storage/import \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -F "kind=zip" \
+  -F "pathPrefix=/imports/" \
+  -F "file=@archive.zip"
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201 Created
+{ "imported": 12, "skipped": 1, "errors": [], "fileIds": ["file_1", "file_2"] }
+```
+</ResponseExample>
+
+---
+
+## Import from GitHub
+
+```http
+POST /api/v1/workspaces/{workspaceId}/storage/import/github
+```
+
+Downloads a repository (as a zip) directly from GitHub and imports it into the workspace tree — no local download required.
+
+<ParamField body="repoUrl" type="string" required>
+`https://github.com/owner/repo` (`.git` suffix accepted). Append `?branch=develop` to the URL, or use the `branch` field.
+</ParamField>
+<ParamField body="branch" type="string">Defaults to the repo's default branch.</ParamField>
+<ParamField body="pathPrefix" type="string">Destination path prefix.</ParamField>
+
+<ResponseField name="imported" type="number" />
+<ResponseField name="skipped" type="number" />
+<ResponseField name="errors" type="object[]" />
+<ResponseField name="fileIds" type="string[]" />
+<ResponseField name="repo" type="string">`owner/repo`</ResponseField>
+<ResponseField name="branch" type="string" />
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/workspaces/ws_123/storage/import/github \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{ "repoUrl": "https://github.com/acme/handbook", "branch": "main", "pathPrefix": "/handbook/" }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201 Created
+{
+  "imported": 84,
+  "skipped": 0,
+  "errors": [],
+  "fileIds": ["file_10", "file_11"],
+  "repo": "acme/handbook",
+  "branch": "main"
+}
+```
+</ResponseExample>
+
+<Note>
+For private repositories, configure a GitHub token on the workspace (`GITHUB_TOKEN` / `GITHUB_IMPORT_TOKEN`) — reach out if you need this enabled for your workspace.
+</Note>
+
+## Errors
+
+| Status | Error | Applies to |
+|--------|-------|------------|
+| 400 | `Zip file is required` / `No files to import` | Import |
+| 413 | `File "{name}" exceeds the 500 MB upload limit` | Import |
+| 400 | `repoUrl is required` / `Invalid GitHub repository URL` | GitHub Import |
+| 502 | `GitHub archive fetch failed: {status} {statusText}` | GitHub Import |
+| 401 | `Unauthorized` | Both |

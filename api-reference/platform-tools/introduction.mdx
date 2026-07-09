@@ -1,0 +1,57 @@
+---
+title: "Platform Tools API"
+description: "Browse the catalog of built-in tools available to agents"
+---
+
+## List Platform Tools
+
+```http
+GET /api/v1/platform-tools
+```
+
+Returns the public catalog of tools that can be attached to an [agent's `toolAllowlist`](/api-reference/agents/agents#agent-config-reference) — e.g. web search, web fetch, and other built-ins. This endpoint is **unauthenticated** and returns only display metadata (no secrets or usage data).
+
+<ParamField query="agentKind" type="string">
+Filter to tools compatible with a given agent kind.
+</ParamField>
+
+<ParamField query="runtimeMode" type="string">
+Filter to tools compatible with a given runtime mode (`assist` or `autonomous`).
+</ParamField>
+
+<ResponseField name="tools" type="object[]">
+  <Expandable title="tool">
+    <ResponseField name="toolId" type="string" />
+    <ResponseField name="name" type="string" />
+    <ResponseField name="description" type="string" />
+    <ResponseField name="category" type="string | null" />
+    <ResponseField name="executionKind" type="string" default="builtin" />
+    <ResponseField name="implementationRef" type="string" />
+    <ResponseField name="agentKinds" type="string[]" />
+    <ResponseField name="runtimeModes" type="string[]" />
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl "https://suite.sundaypyjamas.com/api/v1/platform-tools?runtimeMode=autonomous"
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "tools": [
+    {
+      "toolId": "web_search",
+      "name": "Web Search",
+      "description": "Search the web for current information",
+      "category": "research",
+      "executionKind": "builtin",
+      "agentKinds": ["agent"],
+      "runtimeModes": ["assist", "autonomous"]
+    }
+  ]
+}
+```
+</ResponseExample>

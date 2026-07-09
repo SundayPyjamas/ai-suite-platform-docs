@@ -1,0 +1,108 @@
+---
+title: "POST /rag/upload"
+api: "POST https://suite.sundaypyjamas.com/api/v1/rag/upload"
+description: "Upload and index documents for retrieval-augmented generation"
+---
+
+## Overview
+
+Uploads one or more files, extracts their text, splits it into chunks, generates embeddings, and stores everything in the workspace's RAG index so it can be queried via [`/rag/query`](/api-reference/rag/query).
+
+## Authentication
+
+<ParamField header="Authorization" type="string" required>
+Bearer token from an authenticated Supabase session. See the [note on RAG auth](/api-reference/rag/introduction#base-url).
+</ParamField>
+
+## Request
+
+Content type: `multipart/form-data`
+
+<ParamField body="files" type="File[]" required>
+One or more files to upload, as `files[]` form fields.
+</ParamField>
+
+<ParamField body="workspace_id" type="string" required>
+UUID of the workspace to associate the documents with. The workspace's RAG index is auto-provisioned on first upload if it doesn't already exist.
+</ParamField>
+
+### Supported File Types
+
+| Type | MIME type | Max size |
+|------|-----------|----------|
+| Plain text | `text/plain` (or `.txt`) | 100 MB |
+| Markdown | `text/markdown` (or `.md`) | 100 MB |
+| CSV | `text/csv` | 100 MB |
+| JSON | `application/json` | 100 MB |
+| PDF | `application/pdf` | 100 MB |
+| Word | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | 100 MB |
+
+<Info>
+Documents are split into ~1000-character chunks along sentence boundaries. CSV files are converted to structured text (with column headers preserved) before chunking.
+</Info>
+
+## Response
+
+<ResponseField name="status" type="string">`"success"`</ResponseField>
+<ResponseField name="message" type="string">e.g. `"Processed 3 files"`</ResponseField>
+<ResponseField name="results" type="object">
+  <Expandable title="results">
+    <ResponseField name="successful" type="number" />
+    <ResponseField name="failed" type="number" />
+    <ResponseField name="details" type="object[]">
+      <Expandable title="detail">
+        <ResponseField name="documentId" type="string" />
+        <ResponseField name="chunks" type="number">Number of chunks created</ResponseField>
+        <ResponseField name="status" type="string">`"completed"` or `"failed"`</ResponseField>
+        <ResponseField name="error" type="string">Present only if `status` is `"failed"`</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="workspace_id" type="string" />
+<ResponseField name="timestamp" type="string">ISO 8601</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/rag/upload \
+  -H "Authorization: Bearer <supabase_access_token>" \
+  -F "workspace_id=9d4c1a2e-..." \
+  -F "files=@report.pdf" \
+  -F "files=@notes.md"
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "status": "success",
+  "message": "Processed 2 files",
+  "results": {
+    "successful": 2,
+    "failed": 0,
+    "details": [
+      { "documentId": "doc_1a2b...", "chunks": 14, "status": "completed" },
+      { "documentId": "doc_3c4d...", "chunks": 6, "status": "completed" }
+    ]
+  },
+  "workspace_id": "9d4c1a2e-...",
+  "timestamp": "2026-07-08T10:00:00Z"
+}
+```
+</ResponseExample>
+
+## Errors
+
+| Status | Error | Cause |
+|--------|-------|-------|
+| 400 | `workspace_id is required` | Missing `workspace_id` field |
+| 400 | `At least one file is required` | No files in `files[]` |
+| 400 | `File {name} exceeds maximum size of 100MB` | File too large |
+| 400 | `File type {type} not supported for {name}` | Unsupported MIME type |
+| 401 | `Authentication required` | Missing/invalid session |
+| 403 | `Access denied to workspace` | Caller isn't a member of the workspace |
+| 500 | `Failed to upload files` | Processing error (see `details` in response) |
+
+<Note>
+Partial success is allowed — some files can fail while others succeed. Check `results.details[].status` for each file.
+</Note>

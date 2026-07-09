@@ -1,0 +1,42 @@
+---
+title: "RAG API"
+description: "Upload documents and query them with retrieval-augmented generation"
+---
+
+## Overview
+
+The RAG API lets a workspace ingest documents, chunk and embed them, and query them with natural-language questions that return a generated answer plus the source passages it was grounded in.
+
+<Steps>
+  <Step title="Upload documents">
+    POST files to [`/api/v1/rag/upload`](/api-reference/rag/upload). Each file is text-extracted, chunked, embedded, and indexed per-workspace.
+  </Step>
+  <Step title="Query">
+    POST a natural-language question to [`/api/v1/rag/query`](/api-reference/rag/query). The engine retrieves the most relevant chunks and returns a generated answer with cited sources.
+  </Step>
+</Steps>
+
+## Base URL
+
+```
+https://suite.sundaypyjamas.com/api/v1/rag
+```
+
+<Warning>
+Unlike the rest of the platform API, the RAG endpoints currently authenticate via a **Supabase session** (the same auth used by the AI Suite web app) rather than a workspace API key. If you're integrating from a backend service rather than the AI Suite frontend, reach out about API-key support for these endpoints before building against them in production.
+</Warning>
+
+## Quotas
+
+Each workspace has a monthly query quota (`rag_workspaces.monthly_quota`, defaults to 1,000). Queries increment usage by 1; uploads are not quota-limited but are capped at 100 MB per file.
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Upload" icon="upload" href="/api-reference/rag/upload">
+    Ingest documents (PDF, DOCX, TXT, MD, CSV, JSON) into the workspace's RAG index.
+  </Card>
+  <Card title="Query" icon="magnifying-glass" href="/api-reference/rag/query">
+    Ask questions and get grounded answers with source citations.
+  </Card>
+</CardGroup>

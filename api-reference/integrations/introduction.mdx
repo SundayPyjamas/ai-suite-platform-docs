@@ -1,0 +1,41 @@
+---
+title: "Integrations API"
+description: "Browse integration packs and manage a workspace's connected MCP tools"
+---
+
+## Overview
+
+**Integration packs** are bundled sets of tools and skills (e.g. a "Notion" pack, a "Linear" pack) that an [agent](/api-reference/agents/introduction) can use. **MCP connectors** are the workspace-level OAuth connections that back those packs — connect once per workspace, then bind the pack to any agent.
+
+<Steps>
+  <Step title="Browse packs">
+    [`GET /integration-packs`](/api-reference/integrations/integration-packs) to see what's available, and what tools/skills each pack provides.
+  </Step>
+  <Step title="Connect">
+    [`POST .../mcp-connectors/{connectorId}`](/api-reference/integrations/mcp-connectors#connect) to start an OAuth flow and connect the underlying service to your workspace.
+  </Step>
+  <Step title="Bind to an agent">
+    Attach the pack via `integrationBindings` on [Update Agent](/api-reference/agents/agents#update-agent).
+  </Step>
+</Steps>
+
+## Base URL
+
+```
+https://suite.sundaypyjamas.com/api/v1
+```
+
+## Authentication
+
+`GET /integration-packs` is public and unauthenticated (catalog metadata only). MCP connector endpoints require a workspace API key or session; **connecting, disconnecting, and enabling/disabling connectors requires a workspace owner or admin** — these are session-only operations, not available via API key.
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Integration Packs" icon="box-archive" href="/api-reference/integrations/integration-packs">
+    Browse the pack catalog and each pack's tools/skills.
+  </Card>
+  <Card title="MCP Connectors" icon="plug" href="/api-reference/integrations/mcp-connectors">
+    Connect, disconnect, and toggle workspace integrations.
+  </Card>
+</CardGroup>

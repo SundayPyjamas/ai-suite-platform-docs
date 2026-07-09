@@ -1,0 +1,69 @@
+---
+title: "Integration Packs"
+description: "Browse the catalog of available integration packs"
+---
+
+## List Integration Packs
+
+```http
+GET /api/v1/integration-packs
+```
+
+Public, unauthenticated. Returns only active packs, ordered alphabetically by name.
+
+<ResponseField name="packs" type="object[]">
+  <Expandable title="pack">
+    <ResponseField name="id" type="string" />
+    <ResponseField name="name" type="string" />
+    <ResponseField name="version" type="string" />
+    <ResponseField name="description" type="string | null" />
+    <ResponseField name="sessionContextFields" type="string[]" />
+    <ResponseField name="recommendedPlatformTools" type="string[]" />
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://suite.sundaypyjamas.com/api/v1/integration-packs
+```
+</RequestExample>
+
+---
+
+## Get Integration Pack
+
+```http
+GET /api/v1/integration-packs/{packId}
+```
+
+<ResponseField name="pack" type="object">Pack object — see [List Integration Packs](#list-integration-packs)</ResponseField>
+<ResponseField name="tools" type="object[]">
+  <Expandable title="tool">
+    <ResponseField name="toolId" type="string" />
+    <ResponseField name="name" type="string" />
+    <ResponseField name="description" type="string" />
+    <ResponseField name="executionMode" type="string">`callback_sync` or `hitl_deferred` (human-in-the-loop)</ResponseField>
+    <ResponseField name="inputSchema" type="object">JSON Schema</ResponseField>
+    <ResponseField name="outputSchema" type="object | null">JSON Schema</ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="skills" type="object[]">
+  <Expandable title="skill">
+    <ResponseField name="skillId" type="string" />
+    <ResponseField name="name" type="string" />
+    <ResponseField name="description" type="string | null" />
+    <ResponseField name="enabledByDefault" type="boolean" />
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://suite.sundaypyjamas.com/api/v1/integration-packs/notion
+```
+</RequestExample>
+
+<ResponseExample>
+```json 404 Not Found
+{ "error": "Pack not found" }
+```
+</ResponseExample>

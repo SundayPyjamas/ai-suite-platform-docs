@@ -1,0 +1,38 @@
+---
+title: "Storage API"
+description: "Browse, organize, and import files in a workspace's file tree"
+---
+
+## Overview
+
+The Storage API exposes a workspace's unified file tree — uploaded documents, generated deliverables, images, and imported source files (including whole GitHub repos) — as a single browsable, foldered structure.
+
+## Base URL
+
+```
+https://suite.sundaypyjamas.com/api/v1/workspaces/{workspaceId}/storage
+```
+
+## Authentication
+
+Supports **dual authentication** — either works:
+
+```http
+Authorization: Bearer spj_ai_your_api_key_here
+```
+
+or an authenticated session cookie (for calls made from the AI Suite web app itself).
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Files" icon="file" href="/api-reference/storage/files">
+    List, move, rename, and read the content of files.
+  </Card>
+  <Card title="Folders & Tree" icon="folder-tree" href="/api-reference/storage/folders">
+    Create and rename folders, and browse the folder tree.
+  </Card>
+  <Card title="Import" icon="file-import" href="/api-reference/storage/import">
+    Bulk-import folders, zip archives, or an entire GitHub repository.
+  </Card>
+</CardGroup>

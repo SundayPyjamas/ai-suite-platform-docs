@@ -192,6 +192,23 @@ fetch('/api/v1/chat', {
 </Accordion>
 </AccordionGroup>
 
+### 402 Payment Required
+
+Returned by credit-metered endpoints — [Agents](/api-reference/agents/introduction), [Artifacts](/api-reference/artifacts/introduction), [Image](/api-reference/image/introduction), and [Apps chat](/api-reference/apps/chat) — when your workspace's credit balance is insufficient. This is separate from the legacy token-limit model used by the base [Chat API](/chat-api); see [Rate Limits](/rate-limits#credit-based-billing) for how the two relate.
+
+<Accordion title="Insufficient Credits">
+```json
+{
+  "error": "Insufficient credits. Please purchase additional credits to continue.",
+  "code": "INSUFFICIENT_CREDITS"
+}
+```
+
+**Cause:** Workspace credit balance is too low to cover the request (checked up front, and again mid-stream for long-running generations).
+
+**Solution:** Top up credits from workspace billing settings, or catch `code: "INSUFFICIENT_CREDITS"` and prompt the user to do so.
+</Accordion>
+
 ### 403 Forbidden
 
 Permission or limit issues.

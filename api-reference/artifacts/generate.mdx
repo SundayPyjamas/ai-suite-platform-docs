@@ -1,0 +1,209 @@
+---
+title: "POST /artifacts/generate"
+api: "POST https://suite.sundaypyjamas.com/api/v1/artifacts/generate"
+description: "Generate a structured insight report from aggregated data"
+---
+
+## Request Body
+
+<ParamField body="scope" type="object" required>
+  <Expandable title="scope" defaultOpen>
+    <ParamField body="level" type="string" required>
+    One of `"organization"`, `"network"`, or `"item"`.
+    </ParamField>
+    <ParamField body="entityId" type="string">Max 256 chars.</ParamField>
+    <ParamField body="label" type="string">User-friendly label for the scope. Max 500 chars.</ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="input" type="object" required>
+  <Expandable title="input" defaultOpen>
+    <ParamField body="aggregates" type="object" required>
+      <Expandable title="aggregates">
+        <ParamField body="recordCount" type="number">Total records the aggregates were computed from.</ParamField>
+        <ParamField body="metrics" type="object">Key metrics as `string | number | boolean | null` values.</ParamField>
+        <ParamField body="breakdowns" type="object[]">
+        Up to 20 dimensional breakdowns. Each has `dimension: string` and `rows` (up to 100 items of `{ key, count?, value? }`).
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    <ParamField body="samples" type="object[]">
+    Up to 60 sample records. Each item: `{ id?: string, fields: object }` — `fields` supports up to 20 keys, each value truncated server-side to ~800 characters.
+    </ParamField>
+    <ParamField body="context" type="object">
+      <Expandable title="context">
+        <ParamField body="instructions" type="string">Custom instructions for this scope/period. Max 4000 chars.</ParamField>
+        <ParamField body="locale" type="string">e.g. `"en-CA"`. Max 32 chars.</ParamField>
+        <ParamField body="audienceProfile" type="string">e.g. `"ministry_briefing"` — influences tone and framing. Max 64 chars.</ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="templateId" type="string" default="insight-narrative-v1">
+Known values: `"insight-narrative-v1"`, `"phabc-data-insights-v1"`. Returns `400` if unrecognized.
+</ParamField>
+
+<ParamField body="appId" type="string">
+UUID of an app in your workspace. Returns `404` if it doesn't belong to your workspace.
+</ParamField>
+
+<ParamField body="period" type="object">
+  <Expandable title="period">
+    <ParamField body="start" type="string">Max 32 chars, ISO 8601 recommended.</ParamField>
+    <ParamField body="end" type="string">Max 32 chars, ISO 8601 recommended.</ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="externalRef" type="string">External reference ID, tracked in billing. Max 256 chars.</ParamField>
+
+<ParamField body="model" type="string">
+Override model, e.g. `"google/gemini-2.5-flash"`. Max 200 chars.
+</ParamField>
+
+<Warning>
+The full request body, serialized as JSON, must not exceed 512,000 bytes.
+</Warning>
+
+## Response
+
+<ResponseField name="data" type="object">
+  <Expandable title="data" defaultOpen>
+    <ResponseField name="templateId" type="string" />
+    <ResponseField name="outputSnapshot" type="object">
+      <Expandable title="outputSnapshot">
+        <ResponseField name="version" type="number">Currently `1`</ResponseField>
+        <ResponseField name="generatedAt" type="string">ISO 8601</ResponseField>
+        <ResponseField name="scope" type="object">Echoes request `scope`</ResponseField>
+        <ResponseField name="period" type="object">Echoes request `period`</ResponseField>
+        <ResponseField name="source" type="object">
+          <Expandable title="source">
+            <ResponseField name="type" type="string">`"customer_payload"`</ResponseField>
+            <ResponseField name="recordCount" type="number" />
+            <ResponseField name="sampleCount" type="number" />
+          </Expandable>
+        </ResponseField>
+        <ResponseField name="llm" type="object">
+          <Expandable title="llm">
+            <ResponseField name="executiveSummary" type="string">120–400 word summary</ResponseField>
+            <ResponseField name="insights" type="object[]">
+              <Expandable title="insight">
+                <ResponseField name="title" type="string">1–120 chars</ResponseField>
+                <ResponseField name="body" type="string" />
+                <ResponseField name="category" type="string">`key_development` · `implementation_pressure` · `alignment_opportunity`</ResponseField>
+                <ResponseField name="evidence" type="string[]">Up to 12 items</ResponseField>
+              </Expandable>
+            </ResponseField>
+            <ResponseField name="followUpConsiderations" type="object[]">
+              <Expandable title="consideration">
+                <ResponseField name="title" type="string" />
+                <ResponseField name="body" type="string" />
+                <ResponseField name="attentionLevel" type="string">`elevated` · `moderate` · `for_awareness`</ResponseField>
+              </Expandable>
+            </ResponseField>
+            <ResponseField name="confidenceNotes" type="string" />
+          </Expandable>
+        </ResponseField>
+        <ResponseField name="displayLabels" type="object">Optional human-readable label overrides for categories/sections/attention levels</ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="usage" type="object">
+      <Expandable title="usage">
+        <ResponseField name="model" type="string" />
+        <ResponseField name="inputTokens" type="number" />
+        <ResponseField name="outputTokens" type="number" />
+        <ResponseField name="costUsd" type="number" />
+        <ResponseField name="providerSlug" type="string" />
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="meta" type="object">
+  <Expandable title="meta">
+    <ResponseField name="requestId" type="string" />
+    <ResponseField name="persisted" type="boolean" />
+    <ResponseField name="workflowRunId" type="string" />
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/artifacts/generate \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "templateId": "insight-narrative-v1",
+    "scope": { "level": "organization", "label": "Acme Inc." },
+    "period": { "start": "2026-04-01", "end": "2026-06-30" },
+    "input": {
+      "aggregates": {
+        "recordCount": 4210,
+        "metrics": { "activeUsers": 1893, "churnRate": 0.042 },
+        "breakdowns": [
+          { "dimension": "plan", "rows": [ { "key": "pro", "count": 1200 }, { "key": "free", "count": 3010 } ] }
+        ]
+      },
+      "samples": [
+        { "id": "u_1", "fields": { "plan": "pro", "lastActive": "2026-06-28" } }
+      ],
+      "context": { "instructions": "Focus on churn drivers.", "locale": "en-US" }
+    }
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "data": {
+    "templateId": "insight-narrative-v1",
+    "outputSnapshot": {
+      "version": 1,
+      "generatedAt": "2026-07-08T10:00:00Z",
+      "templateId": "insight-narrative-v1",
+      "scope": { "level": "organization", "label": "Acme Inc." },
+      "period": { "start": "2026-04-01", "end": "2026-06-30" },
+      "source": { "type": "customer_payload", "recordCount": 4210, "sampleCount": 1 },
+      "llm": {
+        "executiveSummary": "Acme's active user base grew steadily through Q2...",
+        "insights": [
+          {
+            "title": "Free-to-pro conversion is slowing",
+            "body": "Only 8% of new free users converted to pro this quarter, down from 12%.",
+            "category": "implementation_pressure",
+            "evidence": ["1200 pro / 4210 total"]
+          }
+        ],
+        "followUpConsiderations": [
+          {
+            "title": "Investigate onboarding drop-off",
+            "body": "Session data suggests most churn happens in the first 7 days.",
+            "attentionLevel": "elevated"
+          }
+        ],
+        "confidenceNotes": "Based on a 4210-record sample with moderate breakdown coverage."
+      }
+    },
+    "usage": {
+      "model": "google/gemini-2.5-flash",
+      "inputTokens": 812,
+      "outputTokens": 340,
+      "costUsd": 0.0021,
+      "providerSlug": "google"
+    }
+  },
+  "meta": { "requestId": "9f2a...", "persisted": false }
+}
+```
+</ResponseExample>
+
+## Errors
+
+| Status | Code | Message |
+|--------|------|---------|
+| 400 | `INVALID_INPUT` | Schema validation failure (bad `scope.level`, unknown `templateId`, oversized payload) |
+| 401 | — | `Invalid API key` |
+| 402 | `INSUFFICIENT_CREDITS` | `Insufficient credits. Please purchase additional credits to continue.` |
+| 404 | `APP_NOT_FOUND` | `App not found in this workspace` |
+| 500 | — | `The AI model could not produce a valid structured report. Please try again or use a different model.` |
+| 503 | — | `No AI model configured` |

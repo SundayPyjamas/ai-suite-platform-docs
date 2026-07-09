@@ -37,18 +37,39 @@ Everything you need to build AI-powered applications.
     Advanced conversational AI with streaming responses and multiple model support.
   </Card>
   <Card
-    title="Multiple AI Models"
-    icon="brain"
-    href="/chat-api#available-models"
+    title="Agents API"
+    icon="robot"
+    href="/api-reference/agents/introduction"
   >
-    Access powerful models like Llama 3.3 70B Versatile for various use cases.
+    Create autonomous or assist-mode AI agents with tools, memory, and streaming runs.
   </Card>
   <Card
-    title="Streaming Responses"
-    icon="bolt"
-    href="/examples/javascript#streaming-responses"
+    title="RAG API"
+    icon="magnifying-glass"
+    href="/api-reference/rag/introduction"
   >
-    Real-time AI interactions with progressive response streaming.
+    Upload documents and query them with retrieval-augmented, source-cited answers.
+  </Card>
+  <Card
+    title="Artifacts API"
+    icon="file-lines"
+    href="/api-reference/artifacts/introduction"
+  >
+    Turn your own aggregated data into structured, LLM-authored insight reports.
+  </Card>
+  <Card
+    title="Image API"
+    icon="image"
+    href="/api-reference/image/introduction"
+  >
+    Generate and edit images with Gemini image models.
+  </Card>
+  <Card
+    title="Vector Store API"
+    icon="database"
+    href="/api-reference/vector-store/introduction"
+  >
+    Per-app vector collections for custom similarity search and retrieval pipelines.
   </Card>
   <Card
     title="Workspace Isolation"
@@ -89,13 +110,15 @@ Ready-to-use implementations in your favorite programming language.
 
 ## API Reference
 
-<Card
-  title="Chat API Reference"
-  icon="code"
-  href="/api-reference/chat/introduction"
->
-  Complete API reference with request/response schemas, parameters, and examples.
-</Card>
+<CardGroup cols={3}>
+  <Card title="Chat" icon="comments" href="/api-reference/chat/introduction" />
+  <Card title="Agents" icon="robot" href="/api-reference/agents/introduction" />
+  <Card title="RAG" icon="magnifying-glass" href="/api-reference/rag/introduction" />
+  <Card title="Artifacts" icon="file-lines" href="/api-reference/artifacts/introduction" />
+  <Card title="Image" icon="image" href="/api-reference/image/introduction" />
+  <Card title="Vector Store" icon="database" href="/api-reference/vector-store/introduction" />
+  <Card title="Apps" icon="table-cells" href="/api-reference/apps/introduction" />
+</CardGroup>
 
 ## Essential Resources
 

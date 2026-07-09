@@ -1,0 +1,69 @@
+---
+title: "Agents API"
+description: "Create and run autonomous or assist-mode AI agents, manage their sessions, and stream results in real time"
+---
+
+## Overview
+
+The Agents API lets you provision **managed agents** — configurable AI workers with their own tools, memory, and runtime behavior — and drive them programmatically. Agents run in one of two modes:
+
+<CardGroup cols={2}>
+  <Card title="Assist Mode" icon="comments">
+    Turn-based, conversational. You send a message to a session and stream back the agent's reply — ideal for chat-style copilots embedded in your product.
+  </Card>
+  <Card title="Autonomous Mode" icon="robot">
+    Task-based. You submit a task ("run"), the agent works independently (using tools, memory, and multi-step reasoning) and produces deliverables/artifacts you poll or subscribe to.
+  </Card>
+</CardGroup>
+
+## Core Concepts
+
+<AccordionGroup>
+<Accordion title="Agent">
+The configuration object: name, system prompt, model, tool allowlist, memory settings, and compute limits (max iterations, wall-clock timeout). Created once, reused across many sessions and runs.
+</Accordion>
+<Accordion title="Session">
+A conversation/work context scoped to one agent. Sessions hold message history and metadata (e.g. which external platform or end user they belong to). Assist-mode messages and autonomous-mode runs both happen inside a session.
+</Accordion>
+<Accordion title="Run">
+A single autonomous task execution inside a session — e.g. "research X and produce a summary document." Runs progress through `pending → running → completed/failed` and emit events and artifacts as they work.
+</Accordion>
+<Accordion title="Tool Calls">
+When an agent needs to call a tool it doesn't have native access to, it emits a pending tool call. Your integration executes the tool and reports the result back via the [tool-results endpoint](/api-reference/agents/messaging#submit-tool-results).
+</Accordion>
+</AccordionGroup>
+
+## Base URL
+
+```
+https://suite.sundaypyjamas.com/api/v1/managed-agents
+```
+
+## Authentication
+
+All requests require a valid API key in the Authorization header:
+
+```http
+Authorization: Bearer spj_ai_your_api_key_here
+```
+
+<Note>
+Learn more about [API key generation and management](/authentication).
+</Note>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Agents" icon="robot" href="/api-reference/agents/agents">
+    Create, list, update, and delete agent configurations.
+  </Card>
+  <Card title="Runs" icon="bolt" href="/api-reference/agents/runs">
+    Submit autonomous tasks and track their progress.
+  </Card>
+  <Card title="Sessions" icon="layer-group" href="/api-reference/agents/sessions">
+    Manage the conversational/work context an agent operates in.
+  </Card>
+  <Card title="Messaging" icon="stream" href="/api-reference/agents/messaging">
+    Stream assist-mode replies, read session timelines, submit tool results, and cancel runs.
+  </Card>
+</CardGroup>

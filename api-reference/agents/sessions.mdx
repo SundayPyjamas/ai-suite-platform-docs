@@ -1,0 +1,115 @@
+﻿---
+title: "Sessions"
+description: "Manage the conversational or work context an agent operates in"
+---
+
+A session groups messages, runs, and memory for one continuous interaction with an agent — one session per end user, chat thread, or integration conversation.
+
+## List Sessions
+
+```http
+GET /api/v1/managed-agents/agents/&#123;agentId&#125;/sessions
+```
+
+<ParamField query="limit" type="number" default="25">1–100</ParamField>
+<ParamField query="offset" type="number" default="0" />
+
+<ResponseField name="sessions" type="Session[]">
+  <Expandable title="Session object">
+    <ResponseField name="id" type="string" />
+    <ResponseField name="title" type="string | null" />
+    <ResponseField name="mount" type="string | null" />
+    <ResponseField name="last_message_at" type="string | null" />
+    <ResponseField name="created_at" type="string" />
+    <ResponseField name="context" type="object">
+      <Expandable title="context">
+        <ResponseField name="app_id" type="string" />
+        <ResponseField name="origin" type="object">
+          <Expandable title="origin">
+            <ResponseField name="source" type="string">`pumble` · `public` · `api` · `manual` · ...</ResponseField>
+            <ResponseField name="threadId" type="string" />
+            <ResponseField name="containerId" type="string" />
+            <ResponseField name="externalWorkspaceId" type="string" />
+            <ResponseField name="messageId" type="string" />
+          </Expandable>
+        </ResponseField>
+        <ResponseField name="kind" type="string">`chat` or `deliverable_job`</ResponseField>
+        <ResponseField name="end_user_id" type="string" />
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="total" type="number">Total session count, for pagination</ResponseField>
+
+---
+
+## Create Session
+
+```http
+POST /api/v1/managed-agents/agents/&#123;agentId&#125;/sessions
+```
+
+<ParamField body="metadata" type="object">Arbitrary custom metadata to attach to the session.</ParamField>
+<ParamField body="end_user_id" type="string">Identifier for the end user this session belongs to, if applicable.</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/managed-agents/agents/3fae1c2e-.../sessions \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{ "end_user_id": "user_123" }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201 Created
+{
+  "session": {
+    "id": "sess_44bc...",
+    "mount": null,
+    "created_at": "2026-07-08T10:00:00Z"
+  }
+}
+```
+</ResponseExample>
+
+<Note>
+Session creation is rate-limited per workspace. A `429` is returned if you exceed the limit — see [Rate Limits](/rate-limits).
+</Note>
+
+---
+
+## Get Session
+
+```http
+GET /api/v1/managed-agents/sessions/&#123;sessionId&#125;
+```
+
+<ResponseExample>
+```json Response
+{
+  "session": {
+    "id": "sess_44bc...",
+    "title": "Q2 report review",
+    "mount": null,
+    "app_id": "3fae1c2e-...",
+    "last_message_at": "2026-07-08T10:12:00Z",
+    "created_at": "2026-07-08T10:00:00Z"
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## Delete Session
+
+```http
+DELETE /api/v1/managed-agents/sessions/&#123;sessionId&#125;
+```
+
+<ResponseExample>
+```json Response
+{ "deleted": true }
+```
+</ResponseExample>

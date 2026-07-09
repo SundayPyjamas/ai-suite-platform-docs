@@ -1,0 +1,230 @@
+﻿---
+title: "Manage Agents"
+description: "List, create, retrieve, update, and delete managed agent configurations"
+---
+
+## List Agents
+
+```http
+GET /api/v1/managed-agents/agents
+```
+
+Returns every agent in your workspace.
+
+<ResponseField name="agents" type="Agent[]">
+  <Expandable title="Agent object">
+    <ResponseField name="id" type="string" />
+    <ResponseField name="name" type="string" />
+    <ResponseField name="description" type="string | null" />
+    <ResponseField name="businessUseCase" type="string | null" />
+    <ResponseField name="appType" type="string">Always `"agent"`</ResponseField>
+    <ResponseField name="isPublic" type="boolean" />
+    <ResponseField name="status" type="string">`"active"` or `"draft"`</ResponseField>
+    <ResponseField name="createdAt" type="string">ISO 8601 timestamp</ResponseField>
+    <ResponseField name="updatedAt" type="string">ISO 8601 timestamp</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://suite.sundaypyjamas.com/api/v1/managed-agents/agents \
+  -H "Authorization: Bearer spj_ai_your_api_key_here"
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "agents": [
+    {
+      "id": "3fae1c2e-...",
+      "name": "Research Assistant",
+      "description": "Summarizes market research documents",
+      "businessUseCase": "Managed agent",
+      "appType": "agent",
+      "isPublic": false,
+      "status": "active",
+      "createdAt": "2026-06-01T12:00:00Z",
+      "updatedAt": "2026-06-14T09:30:00Z"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+---
+
+## Create Agent
+
+```http
+POST /api/v1/managed-agents/agents
+```
+
+<ParamField body="name" type="string" required>
+Display name for the agent.
+</ParamField>
+
+<ParamField body="businessUseCase" type="string" default="Managed agent">
+Free-text description of what this agent is for.
+</ParamField>
+
+<ParamField body="description" type="string">
+Longer description shown in agent listings.
+</ParamField>
+
+<ParamField body="prompt" type="string">
+System prompt that defines the agent's behavior and persona.
+</ParamField>
+
+<ParamField body="config" type="object">
+Partial [agent config](#agent-config-reference) object. Deep-merged with platform defaults — you only need to specify the fields you want to override.
+</ParamField>
+
+<ParamField body="llm" type="object">
+  <Expandable title="llm">
+    <ParamField body="componentId" type="string">
+    ID of the LLM component/model to bind to this agent.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/managed-agents/agents \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Research Assistant",
+    "description": "Summarizes market research documents",
+    "prompt": "You are a meticulous research analyst.",
+    "config": {
+      "capabilities": {
+        "tools": { "web_search": true }
+      }
+    }
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201 Created
+{
+  "agent": {
+    "id": "3fae1c2e-...",
+    "name": "Research Assistant",
+    "appType": "agent",
+    "createdAt": "2026-07-08T10:00:00Z"
+  }
+}
+```
+</ResponseExample>
+
+<Warning>
+Returns `400` with `"name is required"` if `name` is missing or empty.
+</Warning>
+
+---
+
+## Get Agent
+
+```http
+GET /api/v1/managed-agents/agents/&#123;agentId&#125;
+```
+
+<ResponseField name="agent" type="object">
+  <Expandable title="Agent detail">
+    <ResponseField name="id" type="string" />
+    <ResponseField name="name" type="string" />
+    <ResponseField name="businessUseCase" type="string | null" />
+    <ResponseField name="mode" type="string">`"assist"` or `"autonomous"`</ResponseField>
+    <ResponseField name="modelId" type="string" />
+    <ResponseField name="config" type="object">See [Agent Config Reference](#agent-config-reference)</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://suite.sundaypyjamas.com/api/v1/managed-agents/agents/3fae1c2e-... \
+  -H "Authorization: Bearer spj_ai_your_api_key_here"
+```
+</RequestExample>
+
+<ResponseExample>
+```json 404 Not Found
+{ "error": "Agent not found" }
+```
+</ResponseExample>
+
+---
+
+## Update Agent
+
+```http
+PATCH /api/v1/managed-agents/agents/&#123;agentId&#125;
+```
+
+All fields are optional — only the fields you send are changed.
+
+<ParamField body="name" type="string" />
+<ParamField body="description" type="string" />
+<ParamField body="businessUseCase" type="string" />
+<ParamField body="prompt" type="string" />
+<ParamField body="isPublic" type="boolean" />
+<ParamField body="config" type="object">
+Partial config, deep-merged with the agent's existing config.
+</ParamField>
+<ParamField body="tools" type="AgentToolBinding[]">
+Replaces the agent's full tool binding list.
+</ParamField>
+<ParamField body="integrationBindings" type="object[]">
+  <Expandable title="integration binding">
+    <ParamField body="packId" type="string" required />
+    <ParamField body="workspaceIntegrationId" type="string" required />
+    <ParamField body="enabledSkillIds" type="string[]" />
+    <ParamField body="enabled" type="boolean" />
+  </Expandable>
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://suite.sundaypyjamas.com/api/v1/managed-agents/agents/3fae1c2e-... \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{ "config": { "capabilities": { "tools": { "web_fetch": true } } } }'
+```
+</RequestExample>
+
+---
+
+## Delete Agent
+
+```http
+DELETE /api/v1/managed-agents/agents/&#123;agentId&#125;
+```
+
+<ResponseExample>
+```json Response
+{ "deleted": true }
+```
+</ResponseExample>
+
+## Agent Config Reference
+
+The `config` object controls runtime behavior. All fields are optional and merge with `DEFAULT_MANAGED_AGENT_CONFIG`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `platformVersion` | number | Config schema version (currently `2`) |
+| `kind` | string | Always `"agent"` |
+| `runtimeMode` | `"assist"` \| `"autonomous"` | How the agent is driven |
+| `capabilities.memory.enabled` | boolean | Whether the agent retains memory across turns |
+| `capabilities.memory.scope` | `"agent"` \| `"workspace"` | Memory isolation scope |
+| `capabilities.deliverables.enabled` | boolean | Required `true` to use the [Runs API](/api-reference/agents/runs) |
+| `capabilities.tools.web_search` | boolean | Enable web search tool |
+| `capabilities.tools.web_fetch` | boolean | Enable URL fetching tool |
+| `capabilities.tools.web_provider` | `"perplexity"` \| `"tavily"` \| `"both"` | Search provider |
+| `capabilities.mcp_servers` | array | Connected MCP servers |
+| `compute.maxIterations` | number | Max reasoning/tool-call loops per run |
+| `compute.maxWallClockMs` | number | Hard timeout per run |
+| `toolAllowlist` | string[] | Restricts which tools the agent may call |
+| `customTools` | object[] | Custom tool definitions with `name`, `description`, `inputSchema`, `callbackUrl` |

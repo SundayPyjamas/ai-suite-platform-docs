@@ -1,0 +1,36 @@
+---
+title: "Apps API"
+description: "Drive a deployed AI app: send chat messages, manage conversation memory, and track usage"
+---
+
+## Overview
+
+An **app** is a deployed, configured AI application in your workspace (a chat assistant, a widget, an embedded copilot). The Apps API lets you talk to it programmatically and manage its conversation state — independent of the Agents API, which is for provisioning and running autonomous [managed agents](/api-reference/agents/introduction).
+
+## Base URL
+
+```
+https://suite.sundaypyjamas.com/api/v1/apps/{appId}
+```
+
+## Authentication
+
+```http
+Authorization: Bearer spj_ai_your_api_key_here
+```
+
+Widget tokens are also accepted as a fallback, scoped to a specific app — useful for calling these endpoints directly from a browser-embedded widget.
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Chat" icon="comments" href="/api-reference/apps/chat">
+    Send a message and get a reply, non-streaming or streamed via SSE.
+  </Card>
+  <Card title="Memory" icon="brain" href="/api-reference/apps/memory">
+    Manage threads and messages — an app's persistent conversation history.
+  </Card>
+  <Card title="Usage" icon="chart-line" href="/api-reference/apps/usage">
+    Retrieve usage statistics for an app over a time window.
+  </Card>
+</CardGroup>

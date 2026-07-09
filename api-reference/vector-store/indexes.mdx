@@ -1,0 +1,90 @@
+---
+title: "Indexes"
+description: "Create, list, inspect, and delete vector collections"
+---
+
+## Create Index
+
+```http
+POST /api/v1/apps/{appId}/vector/{vectorName}/create-index
+```
+
+<ParamField body="vectorSize" type="number" required>
+Embedding dimension. Must be a positive integer.
+</ParamField>
+
+<ParamField body="distance" type="string" required>
+One of `Cosine`, `Dot`, `Euclid`, `Manhattan`.
+</ParamField>
+
+<ParamField body="config" type="object">
+Optional backend-specific configuration, passed through as-is.
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/apps/app_123/vector/docs/create-index \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{ "vectorSize": 1536, "distance": "Cosine" }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201 Created
+{
+  "created": true,
+  "collectionName": "docs",
+  "vectorSize": 1536,
+  "distance": "Cosine"
+}
+```
+</ResponseExample>
+
+<Warning>
+Returns `409` if a collection with this `vectorName` already exists for the app.
+</Warning>
+
+---
+
+## List Indexes
+
+```http
+GET /api/v1/apps/{appId}/vector/{vectorName}/indexes
+```
+
+<ResponseExample>
+```json Response
+{ "indexes": ["docs", "products"] }
+```
+</ResponseExample>
+
+---
+
+## Get Index
+
+```http
+GET /api/v1/apps/{appId}/vector/{vectorName}/indexes/{indexName}
+```
+
+<ResponseField name="data" type="unknown">Backend-specific index metadata (point count, config, etc.)</ResponseField>
+
+<ResponseExample>
+```json 404 Not Found
+{ "error": "Index \"docs\" not found" }
+```
+</ResponseExample>
+
+---
+
+## Delete Index
+
+```http
+DELETE /api/v1/apps/{appId}/vector/{vectorName}/indexes/{indexName}
+```
+
+<ResponseExample>
+```json Response
+{ "deleted": true, "collectionName": "docs" }
+```
+</ResponseExample>

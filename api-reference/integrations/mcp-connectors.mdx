@@ -1,0 +1,125 @@
+---
+title: "MCP Connectors"
+description: "Connect, disconnect, and toggle a workspace's MCP integrations"
+---
+
+<Info>
+Connect, Disconnect, and Toggle require an authenticated **session** (workspace owner or admin) — they're designed for the AI Suite web app's settings UI, not machine-to-machine API key access. List works with either a session or an API key.
+</Info>
+
+## List Connectors
+
+```http
+GET /api/v1/workspaces/{workspaceId}/mcp-connectors
+```
+
+<ResponseField name="connectors" type="object[]">
+  <Expandable title="connector">
+    <ResponseField name="id" type="string">e.g. `"notion"`, `"canva"`, `"linear"`</ResponseField>
+    <ResponseField name="name" type="string" />
+    <ResponseField name="description" type="string" />
+    <ResponseField name="iconUrl" type="string | null" />
+    <ResponseField name="serverName" type="string">MCP server name, as referenced in an agent's `config.capabilities.mcp_servers`</ResponseField>
+    <ResponseField name="mcpUrl" type="string" />
+    <ResponseField name="mcpTransport" type="string">`http` · `sse` · `stdio`</ResponseField>
+    <ResponseField name="status" type="string">`connected` · `disconnected` · `error`</ResponseField>
+    <ResponseField name="connected" type="boolean" />
+    <ResponseField name="accountLabel" type="string | null" />
+    <ResponseField name="enabled" type="boolean" />
+    <ResponseField name="lastError" type="string | null" />
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://suite.sundaypyjamas.com/api/v1/workspaces/ws_123/mcp-connectors \
+  -H "Authorization: Bearer spj_ai_your_api_key_here"
+```
+</RequestExample>
+
+---
+
+## Connect
+
+```http
+POST /api/v1/workspaces/{workspaceId}/mcp-connectors/{connectorId}
+```
+
+Starts an OAuth flow for the connector. Redirect the user to the returned `authorizeUrl`; after they approve, the provider redirects to AI Suite's OAuth callback, which completes the connection and redirects the user to `returnTo`.
+
+<ParamField body="returnTo" type="string">
+Where to send the user after the OAuth flow completes. Defaults to the workspace's agent settings page. Unsafe/external paths are ignored.
+</ParamField>
+
+<ResponseField name="authorizeUrl" type="string">Redirect the user's browser here to start OAuth.</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/workspaces/ws_123/mcp-connectors/notion \
+  -H "Cookie: <session_cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{ "returnTo": "/workspace/ws_123/agents?tab=connectors" }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{ "authorizeUrl": "https://api.notion.com/v1/oauth/authorize?client_id=...&code_challenge=...&state=..." }
+```
+</ResponseExample>
+
+<Note>
+Tokens are never returned to the client — they're exchanged server-side and stored encrypted. On completion, the user lands back on `returnTo` with `?connected={connectorId}` appended so your UI can refresh.
+</Note>
+
+---
+
+## Disconnect
+
+```http
+DELETE /api/v1/workspaces/{workspaceId}/mcp-connectors/{connectorId}
+```
+
+Revokes the stored OAuth tokens and marks the connector `disconnected`. Idempotent.
+
+<ResponseExample>
+```json Response
+{ "disconnected": true }
+```
+</ResponseExample>
+
+---
+
+## Enable / Disable
+
+```http
+PATCH /api/v1/workspaces/{workspaceId}/mcp-connectors/{connectorId}
+```
+
+Toggles whether a **connected** connector is available to agents, without revoking its tokens — useful for temporarily pausing access.
+
+<ParamField body="enabled" type="boolean" required />
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://suite.sundaypyjamas.com/api/v1/workspaces/ws_123/mcp-connectors/notion \
+  -H "Cookie: <session_cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{ "enabled": false }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{ "enabled": false }
+```
+</ResponseExample>
+
+## Errors
+
+| Status | Error | Cause |
+|--------|-------|-------|
+| 400 | `enabled boolean is required` | Toggle: missing/invalid `enabled` |
+| 401 / 403 | `Only workspace owners and admins can manage skills` | Connect/Disconnect/Toggle by a non-admin |
+| 404 | `Connector not found` | Unknown `connectorId` |
+| 500 | `Failed to start OAuth` / `Failed to disconnect connector` / `Failed to update connector` | Server error |

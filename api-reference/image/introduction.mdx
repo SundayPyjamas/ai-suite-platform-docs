@@ -1,0 +1,30 @@
+---
+title: "Image API"
+description: "Generate and edit images with Gemini image models"
+---
+
+## Overview
+
+The Image API generates images from a text prompt, or edits an existing image given a prompt and a source image. It also supports **profiles** — named presets (e.g. `ultrasound`) that pre-configure the prompt, operation, and model for a specialized use case.
+
+## Base URL
+
+```
+https://suite.sundaypyjamas.com/api/v1/image
+```
+
+## Authentication
+
+```http
+Authorization: Bearer spj_ai_your_api_key_here
+```
+
+## Storage
+
+If your workspace has S3 storage configured (`STORAGE_PROVIDER=s3`), generated images are persisted and the response returns signed URLs (`raw_url`, `processed_url`) instead of inline base64 — pass `persist: true`/`false` to override the default.
+
+## Resources
+
+<Card title="Generate / Edit Image" icon="image" href="/api-reference/image/generate">
+  POST a prompt (and optionally a source image) to generate or edit an image.
+</Card>

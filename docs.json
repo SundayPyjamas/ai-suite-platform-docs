@@ -3,11 +3,22 @@
   "theme": "mint",
   "name": "SundayPyjamas AI Suite",
   "colors": {
-    "primary": "#cc3743",
-    "light": "#d85563",
-    "dark": "#b12d3b"
+    "primary": "#52525B",
+    "light": "#A1A1AA",
+    "dark": "#27272A"
   },
   "favicon": "/favicon.ico",
+  "fonts": {
+    "heading": {
+      "family": "Inter"
+    },
+    "body": {
+      "family": "Inter"
+    }
+  },
+  "background": {
+    "decoration": "gradient"
+  },
   "navigation": {
     "tabs": [
       {
@@ -50,10 +61,89 @@
         "tab": "API Reference",
         "groups": [
           {
-            "group": "Chat API",
+            "group": "Chat",
             "pages": [
               "api-reference/chat/introduction",
               "api-reference/chat/post-chat"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "api-reference/agents/introduction",
+              "api-reference/agents/agents",
+              "api-reference/agents/runs",
+              "api-reference/agents/sessions",
+              "api-reference/agents/messaging"
+            ]
+          },
+          {
+            "group": "RAG",
+            "pages": [
+              "api-reference/rag/introduction",
+              "api-reference/rag/upload",
+              "api-reference/rag/query"
+            ]
+          },
+          {
+            "group": "Artifacts",
+            "pages": [
+              "api-reference/artifacts/introduction",
+              "api-reference/artifacts/generate"
+            ]
+          },
+          {
+            "group": "Image",
+            "pages": [
+              "api-reference/image/introduction",
+              "api-reference/image/generate"
+            ]
+          },
+          {
+            "group": "Vector Store",
+            "pages": [
+              "api-reference/vector-store/introduction",
+              "api-reference/vector-store/indexes",
+              "api-reference/vector-store/vectors"
+            ]
+          },
+          {
+            "group": "Apps",
+            "pages": [
+              "api-reference/apps/introduction",
+              "api-reference/apps/chat",
+              "api-reference/apps/memory",
+              "api-reference/apps/usage"
+            ]
+          },
+          {
+            "group": "Storage",
+            "pages": [
+              "api-reference/storage/introduction",
+              "api-reference/storage/files",
+              "api-reference/storage/folders",
+              "api-reference/storage/import"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "api-reference/integrations/introduction",
+              "api-reference/integrations/integration-packs",
+              "api-reference/integrations/mcp-connectors"
+            ]
+          },
+          {
+            "group": "Insights",
+            "pages": [
+              "api-reference/insights/introduction",
+              "api-reference/insights/conversations"
+            ]
+          },
+          {
+            "group": "Platform Tools",
+            "pages": [
+              "api-reference/platform-tools/introduction"
             ]
           }
         ]
@@ -75,8 +165,9 @@
     }
   },
   "logo": {
-    "light": "https://suite.sundaypyjamas.com/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Flogo-light.838803d5.png&w=384&q=75",
-    "dark": "https://sundaypyjamas.com/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Flogo-dark.7d1c85d7.png&w=384&q=75"
+    "light": "/logo/dark.svg",
+    "dark": "/logo/light.svg",
+    "href": "https://suite.sundaypyjamas.com"
   },
   "navbar": {
     "links": [],

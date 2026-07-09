@@ -118,6 +118,14 @@ X-Monthly-Limit: 100000
 </Tab>
 </Tabs>
 
+## Credit-Based Billing
+
+<Info>
+The base [Chat API](/chat-api) (`/api/v1/chat`) is metered by the token-quota model described above. Newer endpoints — [Agents](/api-reference/agents/introduction), [Artifacts](/api-reference/artifacts/introduction), [Image](/api-reference/image/introduction), and [Apps chat](/api-reference/apps/chat) — are metered by **workspace credit balance** instead, and return `402 Payment Required` with `code: "INSUFFICIENT_CREDITS"` when the balance runs out. See [Error Handling](/errors#402-payment-required) for the exact response shape.
+</Info>
+
+Credits are consumed per request based on model, tokens, and (for Image) generation cost. Top up or manage auto-recharge from your workspace billing settings.
+
 ## Rate Limiting
 
 ### Request Limits

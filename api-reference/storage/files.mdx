@@ -1,0 +1,105 @@
+---
+title: "Files"
+description: "List, move, rename, and read file content"
+---
+
+## List Files
+
+```http
+GET /api/v1/workspaces/{workspaceId}/storage
+```
+
+<ParamField query="type" type="string" default="all">
+`all` · `images` · `deliverables` · `documents` · `files`
+</ParamField>
+<ParamField query="limit" type="number" default="50">Capped at 200.</ParamField>
+<ParamField query="search" type="string">Filename search (partial match).</ParamField>
+
+<ResponseField name="files" type="StorageFile[]">
+  <Expandable title="StorageFile">
+    <ResponseField name="id" type="string" />
+    <ResponseField name="type" type="string">`image` · `deliverable` · `document` · `file`</ResponseField>
+    <ResponseField name="filename" type="string" />
+    <ResponseField name="mimeType" type="string" />
+    <ResponseField name="sizeBytes" type="number | null" />
+    <ResponseField name="source" type="string | null">Human-readable origin label</ResponseField>
+    <ResponseField name="sourceId" type="string | null">App ID, run ID, or upload ID that produced this file</ResponseField>
+    <ResponseField name="presignedUrl" type="string | null">Signed S3 URL, valid 15 minutes</ResponseField>
+    <ResponseField name="createdAt" type="string" />
+    <ResponseField name="path" type="string">Logical path in the workspace tree (`type: "file"` only)</ResponseField>
+    <ResponseField name="isIndexed" type="boolean" />
+    <ResponseField name="indexStatus" type="string">`none` · `queued` · `processing` · `ready` · `failed`</ResponseField>
+    <ResponseField name="isGitHubMirror" type="boolean">True if this file was imported from GitHub</ResponseField>
+    <ResponseField name="externalRef" type="object">GitHub repo/branch/commit metadata, if applicable</ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="totals" type="object">`{ images, deliverables, documents, files }` counts</ResponseField>
+<ResponseField name="hasMore" type="boolean" />
+
+<RequestExample>
+```bash cURL
+curl "https://suite.sundaypyjamas.com/api/v1/workspaces/ws_123/storage?type=documents&limit=20" \
+  -H "Authorization: Bearer spj_ai_your_api_key_here"
+```
+</RequestExample>
+
+---
+
+## Get File Content
+
+```http
+GET /api/v1/workspaces/{workspaceId}/storage/content
+```
+
+<ParamField query="fileId" type="string" required />
+<ParamField query="fileType" type="string" required>`image` · `deliverable` · `document` · `file`</ParamField>
+
+Streams the raw file with `Content-Type` set to the stored MIME type and `Content-Disposition: inline`.
+
+<RequestExample>
+```bash cURL
+curl "https://suite.sundaypyjamas.com/api/v1/workspaces/ws_123/storage/content?fileId=file_1&fileType=document" \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -o downloaded-file.pdf
+```
+</RequestExample>
+
+---
+
+## Move or Rename File
+
+```http
+PATCH /api/v1/workspaces/{workspaceId}/storage/files/{fileId}
+```
+
+<ParamField body="action" type="string" default="rename">`move` or `rename`</ParamField>
+<ParamField body="destFolderPath" type="string">Required when `action` is `move`.</ParamField>
+<ParamField body="newName" type="string">Required when `action` is `rename`.</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://suite.sundaypyjamas.com/api/v1/workspaces/ws_123/storage/files/file_1 \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{ "action": "move", "destFolderPath": "/archive" }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{ "file": { "id": "file_1", "filename": "report.pdf", "path": "/archive/report.pdf", "...": "..." } }
+```
+</ResponseExample>
+
+<Note>
+There is also a bulk variant of this operation at `PATCH /api/v1/workspaces/{workspaceId}/storage/files` — same body shape, plus a top-level `fileId` field to select the target file.
+</Note>
+
+## Errors
+
+| Status | Error |
+|--------|-------|
+| 400 | `fileId is required` / `destFolderPath is required for move` / `newName is required for rename` |
+| 400 | `Missing fileId or fileType` (Get Content) |
+| 401 | `Unauthorized` |
+| 404 | `File not found` / `Storage key not found` / `Empty file` |

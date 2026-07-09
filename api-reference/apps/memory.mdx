@@ -1,0 +1,195 @@
+---
+title: "Memory"
+description: "Manage an app's conversation threads and messages"
+---
+
+Threads are an app's persistent conversation history — created automatically by [Chat](/api-reference/apps/chat) or managed directly via these endpoints.
+
+## List Threads
+
+```http
+GET /api/v1/apps/{appId}/memory/threads
+```
+
+<ParamField query="limit" type="number" default="20">Capped at 100.</ParamField>
+<ParamField query="offset" type="number" default="0" />
+<ParamField query="status" type="string">Filter by `active`, `archived`, or `closed`.</ParamField>
+
+<ResponseExample>
+```json Response
+{
+  "data": [
+    {
+      "id": "thr_a1b2...",
+      "app_id": "app_123",
+      "workspace_id": "ws_...",
+      "session_id": null,
+      "title": "New Thread",
+      "status": "active",
+      "message_count": 4,
+      "metadata": {},
+      "created_at": "2026-07-08T09:00:00Z",
+      "updated_at": "2026-07-08T09:12:00Z"
+    }
+  ],
+  "meta": { "limit": 20, "offset": 0, "total": 1 }
+}
+```
+</ResponseExample>
+
+---
+
+## Create Thread
+
+```http
+POST /api/v1/apps/{appId}/memory/threads
+```
+
+<ParamField body="title" type="string" default="New Thread" />
+<ParamField body="metadata" type="object" default="{}" />
+
+---
+
+## Get Thread
+
+```http
+GET /api/v1/apps/{appId}/memory/threads/{threadId}
+```
+
+---
+
+## Update Thread
+
+```http
+PATCH /api/v1/apps/{appId}/memory/threads/{threadId}
+```
+
+<ParamField body="title" type="string" />
+<ParamField body="status" type="string">`active`, `archived`, or `closed`.</ParamField>
+
+---
+
+## Delete (Archive) Thread
+
+```http
+DELETE /api/v1/apps/{appId}/memory/threads/{threadId}
+```
+
+Marks the thread `archived` rather than hard-deleting it.
+
+<ResponseExample>
+```json Response
+{ "success": true, "threadId": "thr_a1b2..." }
+```
+</ResponseExample>
+
+---
+
+## List Thread Messages
+
+```http
+GET /api/v1/apps/{appId}/memory/threads/{threadId}/messages
+```
+
+<ParamField query="limit" type="number" default="50">Capped at 200.</ParamField>
+<ParamField query="offset" type="number" default="0" />
+
+<ResponseExample>
+```json Response
+{
+  "data": [
+    {
+      "id": "msg_1",
+      "workspace_id": "ws_...",
+      "app_id": "app_123",
+      "thread_id": "thr_a1b2...",
+      "role": "user",
+      "content": "What's our refund policy?",
+      "sequence_number": 1,
+      "request_id": "req_1",
+      "turn_id": "turn_1",
+      "provider_status": "success",
+      "latency_ms": 640,
+      "input_tokens": 214,
+      "output_tokens": 18,
+      "cost_usd": 0.0004,
+      "rag_sources": [],
+      "metadata": {},
+      "created_at": "2026-07-08T09:00:00Z"
+    }
+  ],
+  "meta": { "limit": 50, "offset": 0, "total": 1 }
+}
+```
+</ResponseExample>
+
+---
+
+## Batch Save Messages
+
+```http
+POST /api/v1/apps/{appId}/memory/save-messages
+```
+
+Writes messages directly into a thread's history without triggering a model call — useful for importing conversation history from another system.
+
+<ParamField body="threadId" type="string" required />
+<ParamField body="messages" type="object[]" required>
+1–100 items.
+  <Expandable title="message">
+    <ParamField body="role" type="string" required>`"user"` or `"assistant"`.</ParamField>
+    <ParamField body="content" type="string" required>Non-empty.</ParamField>
+    <ParamField body="requestId" type="string" />
+    <ParamField body="turnId" type="string" />
+    <ParamField body="metadata" type="object" />
+  </Expandable>
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/apps/app_123/memory/save-messages \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "threadId": "thr_a1b2...",
+    "messages": [
+      { "role": "user", "content": "Hi there" },
+      { "role": "assistant", "content": "Hello! How can I help?" }
+    ]
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201 Created
+{ "saved": 2, "threadId": "thr_a1b2..." }
+```
+</ResponseExample>
+
+---
+
+## Memory Status
+
+```http
+GET /api/v1/apps/{appId}/memory/status
+```
+
+<ResponseExample>
+```json Response
+{
+  "appId": "app_123",
+  "threadCount": 42,
+  "activeThreadCount": 9,
+  "messageCount": 631
+}
+```
+</ResponseExample>
+
+## Errors
+
+| Status | Error | Applies to |
+|--------|-------|------------|
+| 400 | `Invalid status. Must be one of: active, archived, closed` | Update Thread |
+| 400 | `threadId is required` / `messages must be a non-empty array` / `Maximum 100 messages per request` | Save Messages |
+| 401 | `Unauthorized or app not found` | All |
+| 404 | `Thread not found` | Thread-scoped endpoints |

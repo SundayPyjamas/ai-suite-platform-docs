@@ -1,0 +1,111 @@
+---
+title: "POST /rag/query"
+api: "POST https://suite.sundaypyjamas.com/api/v1/rag/query"
+description: "Ask a natural-language question grounded in your uploaded documents"
+---
+
+## Authentication
+
+<ParamField header="Authorization" type="string" required>
+Bearer token from an authenticated Supabase session. See the [note on RAG auth](/api-reference/rag/introduction#base-url).
+</ParamField>
+
+## Request Body
+
+<ParamField body="query" type="string" required>
+The question to answer.
+</ParamField>
+
+<ParamField body="workspace_id" type="string" required>
+UUID of the workspace whose documents to search.
+</ParamField>
+
+<ParamField body="options" type="object">
+  <Expandable title="options">
+    <ParamField body="max_sources" type="number" default="5">
+    Maximum number of source chunks to retrieve.
+    </ParamField>
+    <ParamField body="confidence_threshold" type="number" default="0.7">
+    Minimum relevance score (0–1) for a chunk to be included as a source.
+    </ParamField>
+    <ParamField body="include_metadata" type="boolean" default="true">
+    Whether to include source metadata in the response.
+    </ParamField>
+    <ParamField body="session_id" type="string">
+    Optional identifier to associate this query with a conversation for context continuity.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response
+
+<ResponseField name="status" type="string">`"success"`</ResponseField>
+<ResponseField name="result" type="object">
+  <Expandable title="result">
+    <ResponseField name="answer" type="string">Generated answer</ResponseField>
+    <ResponseField name="confidence" type="number">0–1 confidence score for the answer</ResponseField>
+    <ResponseField name="sources" type="object[]">
+      <Expandable title="source">
+        <ResponseField name="content" type="string">Relevant text excerpt</ResponseField>
+        <ResponseField name="document" type="string">Source document name</ResponseField>
+        <ResponseField name="page" type="number" />
+        <ResponseField name="confidence" type="number" />
+        <ResponseField name="relevance_score" type="number" />
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="usage" type="object">Token/quota usage for this query</ResponseField>
+<ResponseField name="performance" type="object">Timing/processing metrics</ResponseField>
+<ResponseField name="workspace_id" type="string" />
+<ResponseField name="timestamp" type="string">ISO 8601</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/rag/query \
+  -H "Authorization: Bearer <supabase_access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What were the top risks identified in the Q2 report?",
+    "workspace_id": "9d4c1a2e-...",
+    "options": { "max_sources": 3 }
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "status": "success",
+  "result": {
+    "answer": "The Q2 report identifies three key risks: supply chain delays, rising customer acquisition costs, and increased competitive pressure in the EU market.",
+    "confidence": 0.86,
+    "sources": [
+      {
+        "content": "Supply chain delays increased average fulfillment time by 4 days...",
+        "document": "report.pdf",
+        "page": 12,
+        "confidence": 0.91,
+        "relevance_score": 0.88
+      }
+    ]
+  },
+  "usage": {},
+  "performance": {},
+  "workspace_id": "9d4c1a2e-...",
+  "timestamp": "2026-07-08T10:05:00Z"
+}
+```
+</ResponseExample>
+
+## Errors
+
+| Status | Error | Cause |
+|--------|-------|-------|
+| 400 | `Query is required and must be a string` | Missing/invalid `query` |
+| 400 | `workspace_id is required` | Missing `workspace_id` |
+| 401 | `Authentication required` | Missing/invalid session |
+| 403 | `Access denied to workspace` | Caller isn't a member of the workspace |
+| 403 | `RAG service not enabled for this workspace` | RAG hasn't been enabled/provisioned yet — [upload a document](/api-reference/rag/upload) first |
+| 429 | `Monthly quota exceeded` (includes `quota` and `current_usage`) | Workspace has used its monthly query quota |
+| 500 | `Failed to process query` | Server error (see `details` in response) |

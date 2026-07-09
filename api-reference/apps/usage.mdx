@@ -1,0 +1,29 @@
+---
+title: "Usage"
+description: "Retrieve usage statistics for an app"
+---
+
+```http
+GET /api/v1/apps/{appId}/usage
+```
+
+<ParamField query="days" type="number" default="30">
+Days of history to include, capped at 90.
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl "https://suite.sundaypyjamas.com/api/v1/apps/app_123/usage?days=7" \
+  -H "Authorization: Bearer spj_ai_your_api_key_here"
+```
+</RequestExample>
+
+<Note>
+Response shape mirrors the workspace-level usage data shown in [Rate Limits](/rate-limits) — token counts and cost, broken out per day for the requested window.
+</Note>
+
+## Errors
+
+| Status | Error |
+|--------|-------|
+| 401 | `Unauthorized or app not found` |

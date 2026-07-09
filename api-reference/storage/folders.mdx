@@ -1,0 +1,87 @@
+---
+title: "Folders & Tree"
+description: "Create and rename folders, and browse the folder tree"
+---
+
+## Create Folder
+
+```http
+POST /api/v1/workspaces/{workspaceId}/storage/folders
+```
+
+<ParamField body="folderPath" type="string" required />
+
+<ResponseExample>
+```json 201 Created
+{
+  "created": true,
+  "folder": { "id": "fold_1", "name": "archive", "path": "/archive" }
+}
+```
+</ResponseExample>
+
+---
+
+## Rename Folder
+
+```http
+PATCH /api/v1/workspaces/{workspaceId}/storage/folders
+```
+
+<ParamField body="folderPath" type="string" required />
+<ParamField body="newName" type="string" required />
+
+---
+
+## Browse Path / Tree
+
+```http
+GET /api/v1/workspaces/{workspaceId}/storage/path
+```
+
+<ParamField query="folderPath" type="string" default="/">Alias: `path`.</ParamField>
+<ParamField query="tree" type="string">
+`1` — return just the list of folder paths. `full` — return the entire tree (folders + files).
+</ParamField>
+<ParamField query="mode" type="string">`tree` is an alias for `tree=1`.</ParamField>
+
+### Response shapes
+
+<Tabs>
+  <Tab title="Default (folder contents)">
+```json
+{
+  "path": "/archive",
+  "folders": [ { "id": "fold_2", "name": "2026", "path": "/archive/2026" } ],
+  "files": [ /* StorageFile[] — see Files */ ]
+}
+```
+  </Tab>
+  <Tab title="tree=1 (paths only)">
+```json
+{ "paths": ["/", "/archive", "/archive/2026", "/uploads"] }
+```
+  </Tab>
+  <Tab title="tree=full">
+```json
+{
+  "folders": [ /* all folders */ ],
+  "files": [ /* all files */ ]
+}
+```
+  </Tab>
+</Tabs>
+
+<RequestExample>
+```bash cURL
+curl "https://suite.sundaypyjamas.com/api/v1/workspaces/ws_123/storage/path?folderPath=/archive" \
+  -H "Authorization: Bearer spj_ai_your_api_key_here"
+```
+</RequestExample>
+
+## Errors
+
+| Status | Error |
+|--------|-------|
+| 400 | `folderPath is required` (Create) / `folderPath and newName are required` (Rename) |
+| 401 | `Unauthorized` |

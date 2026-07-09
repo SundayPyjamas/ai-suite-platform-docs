@@ -1,0 +1,116 @@
+---
+title: "Conversations"
+description: "List and inspect conversation analytics"
+---
+
+## List Conversations
+
+```http
+GET /api/v1/workspaces/{workspaceId}/insights/conversations
+```
+
+<ParamField query="limit" type="number" default="20">Page size, clamped to 1–100.</ParamField>
+<ParamField query="offset" type="number" default="0" />
+<ParamField query="from" type="string">ISO 8601. Filters by `updated_at` (or `created_at` if `updated_at` is null) &gt;= `from`.</ParamField>
+<ParamField query="to" type="string">ISO 8601. Filters by `updated_at` (or `created_at`) &lt;= `to`.</ParamField>
+<ParamField query="app_id" type="string">Filter by app ID. Repeat the param for multiple apps, or use `app_ids` as a comma-separated list.</ParamField>
+<ParamField query="user_key" type="string">
+Filter by end user — matches `metadata.external_user_id`, `metadata.anonymous_visitor_id`, or `session_id`.
+</ParamField>
+<ParamField query="status" type="string" />
+
+<ResponseField name="data" type="object[]">
+  <Expandable title="Conversation summary">
+    <ResponseField name="id" type="string" />
+    <ResponseField name="workspace_id" type="string" />
+    <ResponseField name="app_id" type="string" />
+    <ResponseField name="app_name" type="string | null" />
+    <ResponseField name="session_id" type="string | null" />
+    <ResponseField name="title" type="string | null" />
+    <ResponseField name="status" type="string | null" />
+    <ResponseField name="message_count" type="number | null" />
+    <ResponseField name="created_at" type="string | null" />
+    <ResponseField name="updated_at" type="string | null" />
+    <ResponseField name="metadata" type="object | null" />
+    <ResponseField name="user_key" type="string">Derived end-user identifier</ResponseField>
+    <ResponseField name="usage_summary" type="object">
+      <Expandable title="usage_summary">
+        <ResponseField name="totalCostUsd" type="number" />
+        <ResponseField name="inputTokens" type="number" />
+        <ResponseField name="outputTokens" type="number" />
+        <ResponseField name="requestCount" type="number" />
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="meta" type="object">`{ limit, offset, total }`</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl "https://suite.sundaypyjamas.com/api/v1/workspaces/ws_123/insights/conversations?limit=10&from=2026-06-01" \
+  -H "Authorization: Bearer spj_ai_your_api_key_here"
+```
+</RequestExample>
+
+---
+
+## Get Conversation
+
+```http
+GET /api/v1/workspaces/{workspaceId}/insights/conversations/{threadId}
+```
+
+<ResponseField name="data" type="object">
+  <Expandable title="Conversation detail">
+    <ResponseField name="id" type="string" />
+    <ResponseField name="workspace_id" type="string" />
+    <ResponseField name="app_id" type="string" />
+    <ResponseField name="session_id" type="string | null" />
+    <ResponseField name="title" type="string | null" />
+    <ResponseField name="status" type="string | null" />
+    <ResponseField name="message_count" type="number | null" />
+    <ResponseField name="created_at" type="string | null" />
+    <ResponseField name="updated_at" type="string | null" />
+    <ResponseField name="metadata" type="object | null" />
+    <ResponseField name="messages" type="object[]">
+      <Expandable title="message">
+        <ResponseField name="id" type="string" />
+        <ResponseField name="role" type="string" />
+        <ResponseField name="content" type="string">Truncated to 4000 characters (with `…`) if longer</ResponseField>
+        <ResponseField name="sequence_number" type="number" />
+        <ResponseField name="created_at" type="string | null" />
+        <ResponseField name="provider_status" type="string | null" />
+        <ResponseField name="error_code" type="string | null" />
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="usage_records" type="object[]">
+      <Expandable title="usage_record">
+        <ResponseField name="id" type="string" />
+        <ResponseField name="request_id" type="string | null" />
+        <ResponseField name="cost_usd" type="number | null" />
+        <ResponseField name="input_tokens" type="number | null" />
+        <ResponseField name="output_tokens" type="number | null" />
+        <ResponseField name="usage_timestamp" type="string | null" />
+        <ResponseField name="endpoint" type="string | null" />
+        <ResponseField name="model" type="string | null" />
+        <ResponseField name="provider_status" type="string | null" />
+        <ResponseField name="component_lines" type="object[]">Per-component cost breakdown</ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="usage_events" type="object[]">Up to 200 most recent raw usage events</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://suite.sundaypyjamas.com/api/v1/workspaces/ws_123/insights/conversations/thr_a1b2... \
+  -H "Authorization: Bearer spj_ai_your_api_key_here"
+```
+</RequestExample>
+
+## Errors
+
+| Status | Error | Cause |
+|--------|-------|-------|
+| 401 | `Unauthorized` | Invalid key, or `workspaceId` doesn't match your API key's workspace |
+| 404 | `Conversation not found` | Thread doesn't exist or belongs to a different workspace |

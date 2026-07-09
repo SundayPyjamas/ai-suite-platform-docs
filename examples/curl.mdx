@@ -858,6 +858,60 @@ fi
 echo "All tests passed! 🎉"
 ```
 
+## Beyond Chat: Other APIs
+
+<AccordionGroup>
+<Accordion title="Create and run an agent">
+```bash
+# Create a managed agent
+curl -X POST https://suite.sundaypyjamas.com/api/v1/managed-agents/agents \
+  -H "Authorization: Bearer $SUNDAYPYJAMAS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Research Assistant", "config": { "capabilities": { "deliverables": { "enabled": true } } } }'
+
+# Submit a task to it
+curl -X POST https://suite.sundaypyjamas.com/api/v1/managed-agents/agents/AGENT_ID/runs \
+  -H "Authorization: Bearer $SUNDAYPYJAMAS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "task": "Summarize the attached Q2 report and list top 3 risks." }'
+```
+See the full [Agents API reference](/api-reference/agents/introduction).
+</Accordion>
+
+<Accordion title="Query your documents with RAG">
+```bash
+curl -X POST https://suite.sundaypyjamas.com/api/v1/rag/query \
+  -H "Authorization: Bearer $SUPABASE_SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "query": "What were the top risks in Q2?", "workspace_id": "'"$WORKSPACE_ID"'" }'
+```
+See the full [RAG API reference](/api-reference/rag/introduction).
+</Accordion>
+
+<Accordion title="Generate an image">
+```bash
+curl -X POST https://suite.sundaypyjamas.com/api/v1/image \
+  -H "Authorization: Bearer $SUNDAYPYJAMAS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "prompt": "A minimalist mountain logo, flat design, teal and white" }'
+```
+See the full [Image API reference](/api-reference/image/introduction).
+</Accordion>
+
+<Accordion title="Generate a structured insight report">
+```bash
+curl -X POST https://suite.sundaypyjamas.com/api/v1/artifacts/generate \
+  -H "Authorization: Bearer $SUNDAYPYJAMAS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scope": { "level": "organization", "label": "Acme Inc." },
+    "input": { "aggregates": { "recordCount": 4210, "metrics": { "churnRate": 0.042 } } }
+  }'
+```
+See the full [Artifacts API reference](/api-reference/artifacts/introduction).
+</Accordion>
+</AccordionGroup>
+
 ## Next Steps
 
 <CardGroup cols={2}>

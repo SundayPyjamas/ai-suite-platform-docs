@@ -1,0 +1,101 @@
+---
+title: "Vectors"
+description: "Upsert and query vector points"
+---
+
+## Upsert Vectors
+
+```http
+POST /api/v1/apps/{appId}/vector/{vectorName}/upsert
+```
+
+<ParamField body="vectors" type="object[]" required>
+Non-empty array of points to insert or update.
+  <Expandable title="VectorPoint">
+    <ParamField body="id" type="string | number" required>Unique point identifier — upserting an existing ID overwrites it.</ParamField>
+    <ParamField body="vector" type="number[]" required>Embedding vector, matching the index's `vectorSize`.</ParamField>
+    <ParamField body="payload" type="object">Arbitrary metadata to store alongside the vector. Defaults to `{}`.</ParamField>
+  </Expandable>
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/apps/app_123/vector/docs/upsert \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vectors": [
+      { "id": "chunk_1", "vector": [0.012, -0.034, "..."], "payload": { "text": "Refunds are processed within 5 business days." } }
+    ]
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{ "upserted": 1, "collectionName": "docs" }
+```
+</ResponseExample>
+
+---
+
+## Query Vectors
+
+```http
+POST /api/v1/apps/{appId}/vector/{vectorName}/query
+```
+
+<ParamField body="vector" type="number[]">
+Query embedding. Required unless `query` is provided and the app's vector backend is a Bedrock Knowledge Base.
+</ParamField>
+
+<ParamField body="query" type="string">
+Natural-language query text. Only used (and required) for apps backed by a Bedrock Knowledge Base — ignored by other backends.
+</ParamField>
+
+<ParamField body="topK" type="number" default="10">
+Number of nearest results to return.
+</ParamField>
+
+<ParamField body="filter" type="object">
+Backend-specific metadata filter.
+</ParamField>
+
+<ParamField body="includePayload" type="boolean" default="true">
+Include each result's stored `payload` in the response.
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/apps/app_123/vector/docs/query \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{ "vector": [0.011, -0.028, "..."], "topK": 5 }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "results": [
+    {
+      "id": "chunk_1",
+      "score": 0.912,
+      "payload": { "text": "Refunds are processed within 5 business days." }
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Errors
+
+| Status | Error | Applies to |
+|--------|-------|------------|
+| 400 | `vectorSize must be a positive integer` | Create Index |
+| 400 | `distance must be one of: Cosine, Dot, Euclid, Manhattan` | Create Index |
+| 400 | `vectors must be a non-empty array` | Upsert |
+| 400 | `vector must be a non-empty array of numbers (or query for Bedrock Knowledge Base apps)` | Query |
+| 401 | `Unauthorized or app not found` | All |
+| 404 | `Collection "{vectorName}" not found` | Query, Upsert, Get/Delete Index |
+| 409 | `Collection "{vectorName}" already exists` | Create Index |

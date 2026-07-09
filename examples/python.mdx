@@ -1141,6 +1141,62 @@ if __name__ == "__main__":
     pytest.main([__file__])
 ```
 
+## Beyond Chat: Other APIs
+
+<AccordionGroup>
+<Accordion title="Create and run an agent">
+```python
+import os
+import requests
+
+api_key = os.getenv('SUNDAYPYJAMAS_API_KEY')
+headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
+
+agent = requests.post(
+    'https://suite.sundaypyjamas.com/api/v1/managed-agents/agents',
+    headers=headers,
+    json={
+        'name': 'Research Assistant',
+        'config': {'capabilities': {'deliverables': {'enabled': True}}},
+    },
+).json()['agent']
+
+run = requests.post(
+    f"https://suite.sundaypyjamas.com/api/v1/managed-agents/agents/{agent['id']}/runs",
+    headers=headers,
+    json={'task': 'Summarize the attached Q2 report and list top 3 risks.'},
+).json()
+```
+See the full [Agents API reference](/api-reference/agents/introduction).
+</Accordion>
+
+<Accordion title="Query your documents with RAG">
+```python
+response = requests.post(
+    'https://suite.sundaypyjamas.com/api/v1/rag/query',
+    headers={'Authorization': f'Bearer {supabase_session_token}'},
+    json={'query': 'What were the top risks in Q2?', 'workspace_id': workspace_id},
+).json()
+
+print(response['result']['answer'])
+```
+See the full [RAG API reference](/api-reference/rag/introduction).
+</Accordion>
+
+<Accordion title="Generate an image">
+```python
+response = requests.post(
+    'https://suite.sundaypyjamas.com/api/v1/image',
+    headers=headers,
+    json={'prompt': 'A minimalist mountain logo, flat design, teal and white'},
+).json()
+
+# response['image'] is base64-encoded PNG
+```
+See the full [Image API reference](/api-reference/image/introduction).
+</Accordion>
+</AccordionGroup>
+
 ## Next Steps
 
 <CardGroup cols={2}>

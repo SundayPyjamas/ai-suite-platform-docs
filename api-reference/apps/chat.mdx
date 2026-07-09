@@ -1,0 +1,166 @@
+---
+title: "Chat"
+description: "Send a message to an app and receive a reply, non-streaming or streamed"
+---
+
+## Send Message
+
+```http
+POST /api/v1/apps/{appId}/chat/message
+```
+
+<ParamField body="message" type="string" required>
+User message, 1–2000 characters.
+</ParamField>
+
+<ParamField body="role" type="string" required>
+Actor role sending the message (non-empty string, e.g. `"user"`).
+</ParamField>
+
+<ParamField body="threadId" type="string">
+Existing thread to continue. If omitted, a new [thread](/api-reference/apps/memory) is created.
+</ParamField>
+
+<ParamField body="sessionId" type="string">
+Session identifier for grouping threads.
+</ParamField>
+
+<ParamField body="lessonContext" type="object">App-specific lesson context, passed through to prompt construction.</ParamField>
+<ParamField body="sessionContext" type="object">App-specific session context, passed through to prompt construction.</ParamField>
+<ParamField body="pageContext" type="object">Free-form page/document context.</ParamField>
+<ParamField body="chatHistory" type="object[]">Prior messages to seed context, if not relying on `threadId`.</ParamField>
+
+<ParamField body="controls" type="object">
+  <Expandable title="controls">
+    <ParamField body="temperature" type="number" />
+    <ParamField body="maxTokens" type="number" />
+    <ParamField body="maxContextMessages" type="number" />
+  </Expandable>
+</ParamField>
+
+### Response
+
+<ResponseField name="threadId" type="string" />
+<ResponseField name="turnId" type="string" />
+<ResponseField name="content" type="string">The assistant's reply</ResponseField>
+<ResponseField name="role" type="string">`"assistant"`</ResponseField>
+<ResponseField name="metadata" type="object">
+  <Expandable title="metadata">
+    <ResponseField name="model" type="string" />
+    <ResponseField name="tokensUsed" type="object">`{ input, output, total }`</ResponseField>
+    <ResponseField name="latencyMs" type="number" />
+  </Expandable>
+</ResponseField>
+<ResponseField name="contextWindow" type="object">
+  <Expandable title="contextWindow">
+    <ResponseField name="utilization" type="number">Fraction of context window used (0–1)</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://suite.sundaypyjamas.com/api/v1/apps/app_123/chat/message \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{ "message": "What'"'"'s our refund policy?", "role": "user" }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "threadId": "thr_a1b2...",
+  "turnId": "turn_c3d4...",
+  "content": "Refunds are processed within 5 business days of the request.",
+  "role": "assistant",
+  "metadata": {
+    "model": "gpt-4o-mini",
+    "tokensUsed": { "input": 214, "output": 18, "total": 232 },
+    "latencyMs": 640
+  },
+  "contextWindow": { "utilization": 0.04 }
+}
+```
+</ResponseExample>
+
+---
+
+## Send Message (Streaming)
+
+```http
+POST /api/v1/apps/{appId}/chat/message/stream
+```
+
+Same request body as [Send Message](#send-message), plus:
+
+<ParamField body="externalIdentity" type="object">
+  <Expandable title="externalIdentity">
+    <ParamField body="externalUserId" type="string" />
+    <ParamField body="role" type="string" />
+    <ParamField body="anonymousVisitorId" type="string" />
+  </Expandable>
+</ParamField>
+
+### Response
+
+`Content-Type: text/event-stream`. Each `data:` event is one of:
+
+```json Token chunk
+{ "type": "token", "content": "Refunds " }
+```
+
+```json Done (final event)
+{
+  "type": "done",
+  "threadId": "thr_a1b2...",
+  "turnId": "turn_c3d4...",
+  "contextWindow": { "utilization": 0.04 },
+  "metadata": {
+    "model": "gpt-4o-mini",
+    "tokensUsed": { "input": 214, "output": 18, "total": 232 },
+    "latencyMs": 640
+  }
+}
+```
+
+```json Error
+{ "type": "error", "code": "MODEL_ERROR", "message": "..." }
+```
+
+<RequestExample>
+```javascript Streaming client
+const res = await fetch(`https://suite.sundaypyjamas.com/api/v1/apps/${appId}/chat/message/stream`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ message: "What's our refund policy?", role: 'user' }),
+});
+
+const reader = res.body.getReader();
+const decoder = new TextDecoder();
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  for (const line of decoder.decode(value).split('\n')) {
+    if (line.startsWith('data: ')) {
+      const event = JSON.parse(line.slice(6));
+      if (event.type === 'token') process.stdout.write(event.content);
+    }
+  }
+}
+```
+</RequestExample>
+
+## Errors
+
+| Status | Error | Cause |
+|--------|-------|-------|
+| 400 | `message is required` | Missing/empty `message` |
+| 400 | `message must be 2000 characters or less` | Message too long |
+| 400 | `role is required` | Missing `role` |
+| 401 | `Unauthorized or app not found` | Invalid key or app not in your workspace |
+| 402 | `Insufficient credits` | Workspace balance too low |
+| 502 | `AI model error: {details}` | Upstream model failure |
+| 503 | `Model configuration error` | App has no valid model configured |

@@ -114,6 +114,19 @@ API keys inherit the permissions of the user who created them:
   </Card>
 </CardGroup>
 
+### Auth by API Group
+
+Most endpoints accept your workspace API key exactly as described above. A few groups differ:
+
+| API | Accepts API key? | Notes |
+|-----|:---:|-------|
+| [Chat](/chat-api), [Agents](/api-reference/agents/introduction), [Artifacts](/api-reference/artifacts/introduction), [Image](/api-reference/image/introduction), [Vector Store](/api-reference/vector-store/introduction), [Apps](/api-reference/apps/introduction), [Insights](/api-reference/insights/introduction) | ✅ | Standard `Bearer spj_ai_...` |
+| [Apps](/api-reference/apps/introduction), [Vector Store](/api-reference/vector-store/introduction) | ✅ (+ widget token) | Also accept a workspace/app-scoped **widget token** as a fallback, for calls made directly from an embedded browser widget |
+| [RAG](/api-reference/rag/introduction) | ❌ (currently) | Requires a Supabase **session** token — the same auth as the AI Suite web app. Not yet available via workspace API key |
+| [Integration Packs](/api-reference/integrations/integration-packs) list, [Platform Tools](/api-reference/platform-tools/introduction) | Public | No authentication required — these are read-only catalog endpoints |
+| [MCP Connectors](/api-reference/integrations/mcp-connectors) connect/disconnect/toggle | ❌ | Session only, and restricted to workspace `owner`/`admin` — not available via API key |
+| [Storage](/api-reference/storage/introduction) | ✅ (+ session) | Accepts either an API key or a session, whichever you have |
+
 ## Security Best Practices
 
 ### ✅ Do

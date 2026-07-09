@@ -1,0 +1,140 @@
+---
+title: "POST /image"
+api: "POST https://suite.sundaypyjamas.com/api/v1/image"
+description: "Generate a new image from a prompt, or edit an existing image"
+---
+
+## Request Body
+
+<ParamField body="prompt" type="string">
+Text description of the image to generate, or the edit instructions when `operation` is `"edit"`. Required unless `profile` supplies a default prompt.
+</ParamField>
+
+<ParamField body="operation" type="string" default="generate">
+`"generate"` (text-to-image) or `"edit"` (image-to-image).
+</ParamField>
+
+<ParamField body="model" type="string">
+Gemini image model, e.g. `"gemini-2.5-flash-image"` or `"gemini-3-pro-image-preview"`. Defaults to the first active image model in your workspace's catalog, or the profile default.
+</ParamField>
+
+<ParamField body="profile" type="string">
+Named enhancement profile, e.g. `"ultrasound"`. Applies profile defaults for prompt, operation, and model.
+</ParamField>
+
+<ParamField body="image" type="string">
+Base64-encoded source image (with or without a `data:image/png;base64,` prefix). Required for `operation: "edit"` unless `image_url` or `raw_image_id` is given.
+</ParamField>
+
+<ParamField body="image_url" type="string">
+URL to a source image (PNG, JPEG, WebP, or GIF). Alternative to `image`.
+</ParamField>
+
+<ParamField body="raw_image_id" type="string">
+UUID of a previously uploaded raw image (requires S3 storage) — re-runs enhancement on a stored upload instead of re-uploading.
+</ParamField>
+
+<ParamField body="provider" type="string" default="gemini">
+`"gemini"` or `"aws-nova-canvas"`. AWS Nova Canvas is only available with `profile: "ultrasound"`.
+</ParamField>
+
+<ParamField body="persist" type="boolean">
+Store raw/processed images in S3. Defaults to `true` if `STORAGE_PROVIDER=s3` is configured for your workspace, otherwise `false`.
+</ParamField>
+
+## Response
+
+<ResponseField name="model" type="string">Model used</ResponseField>
+<ResponseField name="prompt" type="string">Resolved prompt actually sent to the model</ResponseField>
+<ResponseField name="operation" type="string">`"generate"` or `"edit"`</ResponseField>
+<ResponseField name="tokensUsed" type="number" />
+<ResponseField name="image" type="string">
+Base64-encoded PNG. Present when S3 storage isn't enabled.
+</ResponseField>
+<ResponseField name="profile" type="string">Profile used, if any</ResponseField>
+<ResponseField name="raw_image_id" type="string">Present only with S3 storage enabled</ResponseField>
+<ResponseField name="processed_run_id" type="string">Present only with S3 storage enabled</ResponseField>
+<ResponseField name="raw_url" type="string">Signed URL to the raw image. Present only with S3 storage enabled</ResponseField>
+<ResponseField name="processed_url" type="string">Signed URL to the generated/edited image. Present only with S3 storage enabled</ResponseField>
+<ResponseField name="request_id" type="string" />
+
+<RequestExample>
+```bash cURL (generate)
+curl -X POST https://suite.sundaypyjamas.com/api/v1/image \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "A minimalist logo of a mountain, flat design, teal and white"
+  }'
+```
+
+```bash cURL (edit)
+curl -X POST https://suite.sundaypyjamas.com/api/v1/image \
+  -H "Authorization: Bearer spj_ai_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operation": "edit",
+    "prompt": "Add a sunset gradient in the background",
+    "image_url": "https://example.com/logo.png"
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response (base64)
+{
+  "model": "gemini-2.5-flash-image",
+  "prompt": "A minimalist logo of a mountain, flat design, teal and white",
+  "operation": "generate",
+  "tokensUsed": 1290,
+  "image": "iVBORw0KGgoAAAANSUhEUgAA..."
+}
+```
+
+```json Response (S3 storage enabled)
+{
+  "model": "gemini-2.5-flash-image",
+  "prompt": "A minimalist logo of a mountain, flat design, teal and white",
+  "operation": "generate",
+  "raw_image_id": "9f21...",
+  "processed_run_id": "af02...",
+  "raw_url": "https://storage.../raw/9f21....png?sig=...",
+  "processed_url": "https://storage.../processed/af02....png?sig=...",
+  "request_id": "7c31..."
+}
+```
+</ResponseExample>
+
+## Errors
+
+| Status | Code | Message |
+|--------|------|---------|
+| 400 | `MISSING_IMAGE_INPUT` | `Image input required for edit operation. Provide either "image" (base64) or "image_url"` |
+| 400 | — | `Prompt is required` |
+| 400 | — | `Invalid model` |
+| 401 | — | `Invalid API key` |
+| 402 | `INSUFFICIENT_CREDITS` | `Insufficient credits. Please purchase additional credits to continue.` |
+| 429 | — | Gemini quota exceeded |
+| 500 | — | `Failed to generate image: {details}` |
+
+## GET /image
+
+Returns endpoint metadata — useful for a quick connectivity check.
+
+<RequestExample>
+```bash cURL
+curl https://suite.sundaypyjamas.com/api/v1/image \
+  -H "Authorization: Bearer spj_ai_your_api_key_here"
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "message": "Image API. POST with { prompt?, profile?: \"ultrasound\", model?, image?, operation? }. Auth: Bearer API key",
+  "endpoint": "/api/v1/image",
+  "methods": ["GET", "POST", "OPTIONS"],
+  "profiles": ["ultrasound"]
+}
+```
+</ResponseExample>
