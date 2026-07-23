@@ -1,0 +1,25 @@
+/* Prevent sidebar/search from showing through the sticky tabs header */
+#navbar {
+  z-index: 30;
+}
+
+.dark #navbar,
+.dark #navbar-transition {
+  background-color: #0a0a0a !important;
+  opacity: 1 !important;
+}
+
+html:not(.dark) #navbar,
+html:not(.dark) #navbar-transition {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+/* Sticky spacer at the top of the sidebar can collide with the tabs row */
+#sidebar-content .pointer-events-none.sticky {
+  display: none !important;
+}
+
+#navigation-items {
+  padding-top: 0.5rem;
+}

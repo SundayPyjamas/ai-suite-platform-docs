@@ -81,7 +81,7 @@
           {
             "group": "Getting Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
               "authentication"
             ]
@@ -235,5 +235,15 @@
     "socials": {
       "github": "https://github.com/sundaypyjamas"
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/user-guide/welcome"
+    },
+    {
+      "source": "/index",
+      "destination": "/introduction"
+    }
+  ]
 }
