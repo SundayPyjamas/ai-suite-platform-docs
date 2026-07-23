@@ -1,0 +1,61 @@
+---
+title: "Configure the Core Agent"
+description: "Adjust how your Core Agent behaves — its instructions, model, tools, and knowledge."
+---
+
+## Why configure it?
+
+The Core Agent works great out of the box. But you can **tune how it behaves** so it fits your workspace — its tone, its rules, which tools it may use, and what documents it can read.
+
+## Opening the settings
+
+<Steps>
+<Step title="Go to the Agents tab">
+  Click **Agents** in the left menu.
+</Step>
+<Step title="Click the settings (gear) button">
+  It's at the top of the session list, near the search icon. This opens the agent's configuration.
+
+  <Frame caption="The Core Agent configuration screen.">
+    <img src="/images/user-guide/agents-configure-overview.png" alt="The Core Agent configuration screen with its settings" />
+  </Frame>
+</Step>
+</Steps>
+
+## The settings, one by one
+
+<AccordionGroup>
+<Accordion title="Instructions — how it should behave" icon="pen">
+  Describe, in plain words, how the agent should act — its tone and any rules. Example: *"Always answer in a friendly, concise way. Use our company's product names. Never share internal pricing."* Think of it as the agent's standing orders.
+</Accordion>
+
+<Accordion title="Model — its brain" icon="brain">
+  Choose which AI powers the agent. Faster models for everyday work, smarter models for harder tasks. See [Choosing a model](/user-guide/choosing-models). The default is a solid choice.
+</Accordion>
+
+<Accordion title="Tools — what it's allowed to do" icon="screwdriver-wrench">
+  Turn on the abilities the agent may use — like search or a connected service. Many tools come from your [integrations](/user-guide/integrations). Give it only what it needs.
+</Accordion>
+
+<Accordion title="Knowledge — what it can read" icon="book">
+  Add documents so the agent answers from **your** information — policies, product docs, notes. See [Ask your own documents](/user-guide/knowledge).
+</Accordion>
+</AccordionGroup>
+
+<Warning>
+**Give the agent only the tools it needs.** More tools is not better — it can slow the agent down or confuse it. Add one, test, then add another if needed.
+</Warning>
+
+## Test after every change
+
+After you adjust a setting, open a **new chat** in the Agents tab and try a task. Tweak the instructions until the agent behaves exactly how you want. Small, clear rules work best.
+
+<Tip>
+Changes to the Core Agent apply across your workspace. If several people share the workspace, agree on the instructions together so everyone gets consistent results.
+</Tip>
+
+## Next step
+
+<Card title="Run & share an agent" icon="play" href="/user-guide/agents/run-and-share">
+  Give the agent a task, watch it work, and share the result.
+</Card>

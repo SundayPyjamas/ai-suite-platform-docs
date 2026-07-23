@@ -1,0 +1,73 @@
+---
+title: "Build a Managed Agent"
+description: "A more powerful, hands-off custom agent for bigger, multi-step tasks."
+---
+
+## What is a Managed agent?
+
+A **Managed agent** is a more powerful kind of custom agent that runs in a **managed environment** — meaning AI Suite handles the heavy lifting behind the scenes. It's built for bigger, more independent tasks that may take several steps and use several tools.
+
+> An [**Assistant**](/user-guide/assistants) is a helpful teammate you chat with.
+> A **Managed agent** is more like a **worker you hand a whole task to**, who then goes off and completes it — checking in when done.
+
+## Assistant or Managed agent?
+
+Use this simple test:
+
+| Your situation | Best choice |
+|---|---|
+| A helper you chat with back-and-forth | **Assistant** |
+| A task you want run start-to-finish on its own | **Managed agent** |
+| Simple instructions and a model | **Assistant** |
+| Multiple steps, multiple tools, more autonomy | **Managed agent** |
+
+<Note>
+Just getting started? Build an [Assistant](/user-guide/assistants) first — or simply use the ready-made [Core Agent](/user-guide/agents/what-are-agents). Move up to a Managed agent when a task is too big for a simple chat helper.
+</Note>
+
+## How to create one
+
+<Steps>
+<Step title="Create a Managed agent">
+  Go to **Agents** (or the Platform area) and choose **Create** → **Managed agent**.
+
+  <Frame caption="Creating a new Managed agent.">
+    <img src="/images/user-guide/agents-managed-create.png" alt="The create managed agent screen" />
+  </Frame>
+</Step>
+<Step title="Name it and describe its goal">
+  Give it a name and describe the **task** you want it to accomplish — the outcome, not just a personality:
+
+  > *Every week, gather our new customer sign-ups, group them by country, and produce a short summary report.*
+</Step>
+<Step title="Choose a model and tools">
+  Pick the AI brain and turn on the tools it needs (see [Connect your tools](/user-guide/integrations)). Managed agents often use several tools together.
+</Step>
+<Step title="Set it running">
+  Start the agent. It works through the steps on its own, and you can watch its progress.
+
+  <Frame caption="A Managed agent working through its task, step by step.">
+    <img src="/images/user-guide/agents-managed-run.png" alt="A managed agent showing its run steps and progress" />
+  </Frame>
+</Step>
+<Step title="Review the result">
+  When it finishes, review what it produced. Refine the goal or tools and run it again if needed.
+</Step>
+</Steps>
+
+## Good practices
+
+- **Describe the goal clearly** — a managed agent does best with a well-defined outcome.
+- **Give it only the tools it needs** — fewer, well-chosen tools work better than many.
+- **Start small** — test on a simple version of the task, then expand.
+- **Check its work** — for anything important, review the result before relying on it.
+
+## Using it
+
+Once built, your Managed agent shows up in the [Agents tab](/user-guide/agents/using-the-agents-tab) agent picker, right alongside the Core Agent and your Assistants. You can also [share it](/user-guide/agents/run-and-share).
+
+## Next step
+
+<Card title="Connect your tools" icon="plug" href="/user-guide/integrations">
+  Give your agents the tools they need to take action.
+</Card>

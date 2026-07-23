@@ -1,0 +1,74 @@
+---
+title: "Build an Assistant"
+description: "Create your own custom agent — with your instructions, model, tools, and knowledge."
+---
+
+## What is an Assistant?
+
+The [Core Agent](/user-guide/agents/what-are-agents) is general-purpose. An **Assistant** is your own **custom agent**, tuned for one job. You give it a name, instructions, a model, and — if you like — tools and documents. Then you can use it right from the [Agents tab](/user-guide/agents/using-the-agents-tab) by switching to it in the agent picker.
+
+If you've read [Build an app](/user-guide/build-an-app), this will feel familiar. An Assistant is like an app that can also **use tools** and **take action**.
+
+## Build it step by step
+
+<Steps>
+<Step title="Start a new Assistant">
+  Go to **Agents** (or the Platform area) and choose **Create** → **Assistant**.
+
+  <Frame caption="Starting a new Assistant.">
+    <img src="/images/user-guide/agents-create-assistant-start.png" alt="The create-assistant screen" />
+  </Frame>
+</Step>
+<Step title="Name it">
+  Give it a clear name, like *"Travel Planner"* or *"Support Helper"*.
+</Step>
+<Step title="Write its instructions">
+  Tell it who it is and how to behave, in plain words:
+
+  > *You are a friendly travel planner. Ask the user for their destination, dates, and budget. Then suggest a simple day-by-day plan. Keep it short and cheerful.*
+
+  <Tip>
+  Good instructions = clear job + clear tone + any rules. Imagine training a new assistant on day one.
+  </Tip>
+
+  <Frame caption="Writing the Assistant's name and instructions.">
+    <img src="/images/user-guide/agents-create-assistant-instructions.png" alt="Form for the assistant name and instruction text" />
+  </Frame>
+</Step>
+<Step title="Choose a model">
+  Pick the AI brain — see [Choosing a model](/user-guide/choosing-models). Default is fine to start.
+</Step>
+<Step title="Add tools (optional)">
+  Turn on any tools it should use (like a connected calendar or search). See [Connect your tools](/user-guide/integrations).
+</Step>
+<Step title="Add knowledge (optional)">
+  Upload documents so it answers from your own information — see [Ask your own documents](/user-guide/knowledge).
+</Step>
+<Step title="Test it">
+  Use the built-in preview to chat with your Assistant. Try a real question and see how it responds.
+
+  <Frame caption="Testing the new Assistant in its preview chat.">
+    <img src="/images/user-guide/agents-create-assistant-test.png" alt="A test chat with the new assistant" />
+  </Frame>
+</Step>
+<Step title="Save and use it">
+  Save it. Now open the [Agents tab](/user-guide/agents/using-the-agents-tab), pick your Assistant from the agent picker, and put it to work — or [share it](/user-guide/agents/run-and-share) with your team.
+</Step>
+</Steps>
+
+## Making it better
+
+- **If it forgets a rule**, add that rule to the instructions.
+- **If it needs to do something**, give it the right tool.
+- **If it needs facts**, add documents to its knowledge.
+- **Test the hard cases** — the awkward questions it will really get.
+
+## Assistant or Managed agent?
+
+An Assistant is the simplest custom agent and covers most needs. For bigger, more hands-off jobs, build a [Managed agent](/user-guide/managed-agents) instead.
+
+## Next step
+
+<Card title="Build a Managed agent" icon="gears" href="/user-guide/managed-agents">
+  For more powerful, multi-step tasks that run on their own.
+</Card>

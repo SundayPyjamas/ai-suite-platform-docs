@@ -22,6 +22,60 @@
   "navigation": {
     "tabs": [
       {
+        "tab": "User Guide",
+        "groups": [
+          {
+            "group": "Start Here",
+            "pages": [
+              "user-guide/welcome",
+              "user-guide/create-account",
+              "user-guide/workspace-tour",
+              "user-guide/first-chat"
+            ]
+          },
+          {
+            "group": "Everyday Skills",
+            "pages": [
+              "user-guide/choosing-models",
+              "user-guide/writing-prompts",
+              "user-guide/reports",
+              "user-guide/images",
+              "user-guide/knowledge"
+            ]
+          },
+          {
+            "group": "How to Use Agents",
+            "pages": [
+              "user-guide/agents/what-are-agents",
+              "user-guide/agents/using-the-agents-tab",
+              "user-guide/agents/capabilities",
+              "user-guide/agents/configure",
+              "user-guide/agents/run-and-share"
+            ]
+          },
+          {
+            "group": "Build Something",
+            "pages": [
+              "user-guide/build-an-app",
+              "user-guide/assistants",
+              "user-guide/managed-agents",
+              "user-guide/integrations",
+              "user-guide/sharing"
+            ]
+          },
+          {
+            "group": "Manage & Get Help",
+            "pages": [
+              "user-guide/team-and-billing",
+              "user-guide/scenarios",
+              "user-guide/faq",
+              "user-guide/glossary",
+              "user-guide/for-developers"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Documentation",
         "groups": [
           {
